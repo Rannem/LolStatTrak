@@ -76,7 +76,7 @@ A Production key is only relevant if the app is ever opened to the public.
 4. **Expose only the `frontend` service publicly** (Settings → Networking → Generate
    Domain). Leave the `backend` service private — Caddy is the only public entrypoint.
 5. In the **Discord Developer Portal**, set the OAuth2 redirect URI to
-   `https://<your-frontend-domain>/signin-discord`.
+   `https://<your-frontend-domain>/api/signin-discord`.
 
 That's it — no manual connection strings, and the two Railway variable references above
 mean the frontend/backend/CORS URLs stay correct automatically if a domain ever changes.

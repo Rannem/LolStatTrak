@@ -73,7 +73,8 @@ builder.Services.AddAuthentication(options =>
     {
         options.ClientId = builder.Configuration["DISCORD_CLIENT_ID"] ?? builder.Configuration["Discord:ClientId"] ?? string.Empty;
         options.ClientSecret = builder.Configuration["DISCORD_CLIENT_SECRET"] ?? builder.Configuration["Discord:ClientSecret"] ?? string.Empty;
-        options.CallbackPath = "/signin-discord";
+        // Must live under /api so Caddy's reverse-proxy rule routes it to the backend.
+        options.CallbackPath = "/api/signin-discord";
         options.AuthorizationEndpoint = "https://discord.com/api/oauth2/authorize";
         options.TokenEndpoint = "https://discord.com/api/oauth2/token";
         options.UserInformationEndpoint = "https://discord.com/api/users/@me";
