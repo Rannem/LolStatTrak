@@ -11,14 +11,6 @@ namespace LolStatTrak.Api.Controllers;
 
 public record CreateLobbyRequest(Guid ClubId);
 
-/// <summary>Full LoL champion id pool used by the randomizer, minus each club's bans.</summary>
-public static class ChampionCatalog
-{
-    // Kept intentionally minimal here; in production this should be refreshed from Riot's
-    // Data Dragon champion.json so new releases show up automatically.
-    public static readonly IReadOnlyCollection<int> AllChampionIds = Enumerable.Range(1, 170).ToList();
-}
-
 [ApiController]
 [Route("api/lobbies")]
 [Authorize]
@@ -27,6 +19,7 @@ public class LobbiesController(
     ClubRepository clubRepository,
     RandomizerService randomizerService,
     LobbyMatchCorrelationService correlationService,
+    ChampionCatalogService championCatalog,
     IHubContext<LobbyHub> hubContext) : ControllerBase
 {
     private Guid CurrentUserId =>
@@ -40,19 +33,31 @@ public class LobbiesController(
         return Ok(lobby);
     }
 
+    /// <summary>Current lobby state (metadata + players) for the initial page load.</summary>
+    [HttpGet("{lobbyId:guid}")]
+    public async Task<IActionResult> Get(Guid lobbyId)
+    {
+        var lobby = await lobbyRepository.GetAsync(lobbyId);
+        if (lobby is null)
+            return NotFound();
+
+        var players = await lobbyRepository.GetPlayerViewsAsync(lobbyId);
+        return Ok(new { lobby, players });
+    }
+
     [HttpPost("{lobbyId:guid}/join")]
     public async Task<IActionResult> Join(Guid lobbyId)
     {
         await lobbyRepository.JoinAsync(lobbyId, CurrentUserId);
-        var players = await lobbyRepository.GetPlayersAsync(lobbyId);
+        var players = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
-            .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId = CurrentUserId });
+            .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId = CurrentUserId, players });
         return Ok(players);
     }
 
     /// <summary>Rolls random teams + champions for everyone currently in the lobby, honoring the club's bans.</summary>
     [HttpPost("{lobbyId:guid}/roll")]
-    public async Task<IActionResult> Roll(Guid lobbyId)
+    public async Task<IActionResult> Roll(Guid lobbyId, CancellationToken ct)
     {
         var lobby = await lobbyRepository.GetAsync(lobbyId);
         if (lobby is null)
@@ -60,14 +65,16 @@ public class LobbiesController(
 
         var players = (await lobbyRepository.GetPlayersAsync(lobbyId)).Select(p => p.UserId).ToList();
         var bannedChampions = await clubRepository.GetBannedChampionsAsync(lobby.ClubId);
+        var catalog = await championCatalog.GetAsync(ct);
 
-        var rolled = randomizerService.Roll(lobbyId, players, ChampionCatalog.AllChampionIds, bannedChampions);
+        var rolled = randomizerService.Roll(lobbyId, players, catalog.AllIds, bannedChampions);
         await lobbyRepository.SaveRollAsync(lobbyId, rolled);
 
+        var views = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
-            .SendAsync(LobbyHubEvents.LobbyRolled, rolled);
+            .SendAsync(LobbyHubEvents.LobbyRolled, views, ct);
 
-        return Ok(rolled);
+        return Ok(views);
     }
 
     /// <summary>

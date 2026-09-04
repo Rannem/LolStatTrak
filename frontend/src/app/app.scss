@@ -1,0 +1,89 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(1, 10, 19, 0.85);
+  border-bottom: 1px solid var(--gold-4);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--gold-1);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+
+  em {
+    font-style: normal;
+    color: var(--gold-3);
+  }
+
+  &:hover {
+    color: #fff;
+  }
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-3);
+  background: radial-gradient(circle at 30% 30%, var(--blue-4), var(--bg-0));
+  color: var(--blue-2);
+  font-size: 1rem;
+  box-shadow: var(--glow-blue);
+}
+
+.nav {
+  display: flex;
+  gap: 1.25rem;
+  flex: 1;
+
+  a {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+
+    &:hover {
+      color: var(--gold-2);
+    }
+  }
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.username {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.avatar-fallback {
+  display: inline-grid;
+  place-items: center;
+  color: var(--gold-2);
+  font-weight: 700;
+  font-size: 0.8rem;
+}

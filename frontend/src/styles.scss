@@ -1,1 +1,401 @@
-/* You can add global styles to this file, and also import other style files */
+/* ---------------------------------------------------------------------------
+   LolStatTrak global theme — dark hextech-inspired palette
+   --------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-0: #010a13;
+  --bg-1: #091428;
+  --bg-2: #0a1428;
+  --bg-3: #1e2328;
+  --surface: rgba(30, 35, 40, 0.75);
+  --surface-hover: rgba(45, 52, 60, 0.9);
+  --border: #3c3c41;
+  --border-strong: #5b5a56;
+
+  --gold-1: #f0e6d2;
+  --gold-2: #c8aa6e;
+  --gold-3: #c89b3c;
+  --gold-4: #785a28;
+
+  --blue-1: #cdfafa;
+  --blue-2: #0ac8b9;
+  --blue-3: #0397ab;
+  --blue-4: #005a82;
+  --blue-team: #1e90ff;
+  --red-team: #e84057;
+
+  --text: #f0e6d2;
+  --text-muted: #a09b8c;
+  --text-dim: #5b5a56;
+
+  --danger: #e84057;
+  --success: #1ed760;
+
+  --radius: 6px;
+  --radius-lg: 12px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  --glow-gold: 0 0 18px rgba(200, 170, 110, 0.35);
+  --glow-blue: 0 0 18px rgba(10, 200, 185, 0.35);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(3, 151, 171, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(200, 155, 60, 0.14), transparent 60%),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+  background-attachment: fixed;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Cinzel', 'Inter', serif;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.5rem;
+  color: var(--gold-1);
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  color: var(--gold-2);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--gold-4);
+  margin-bottom: 1rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+a {
+  color: var(--blue-2);
+  text-decoration: none;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--blue-1);
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.dim {
+  color: var(--text-dim);
+}
+
+/* ---- Layout -------------------------------------------------------------- */
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.7rem;
+    color: var(--blue-2);
+    margin-bottom: 0.25rem;
+  }
+}
+
+.grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* ---- Cards --------------------------------------------------------------- */
+.card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(200, 170, 110, 0.08), transparent 45%);
+  }
+}
+
+.card-link {
+  display: block;
+  color: inherit;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: var(--gold-3);
+    box-shadow: var(--shadow), var(--glow-gold);
+    color: inherit;
+  }
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+button,
+.btn {
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--gold-4);
+  color: var(--gold-1);
+  background: linear-gradient(180deg, #1e2328 0%, #0a1428 100%);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover:not(:disabled) {
+    border-color: var(--gold-2);
+    color: #fff;
+    box-shadow: var(--glow-gold);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--gold-3) 0%, var(--gold-4) 100%);
+  border-color: var(--gold-2);
+  color: #0a1428;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(180deg, #e0b95a 0%, var(--gold-3) 100%);
+    color: #010a13;
+  }
+}
+
+.btn-accent {
+  background: linear-gradient(180deg, var(--blue-3) 0%, var(--blue-4) 100%);
+  border-color: var(--blue-2);
+  color: var(--blue-1);
+
+  &:hover:not(:disabled) {
+    box-shadow: var(--glow-blue);
+    border-color: var(--blue-1);
+  }
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    color: var(--text);
+    box-shadow: none;
+  }
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+
+  &:hover:not(:disabled) {
+    background: rgba(232, 64, 87, 0.12);
+    box-shadow: 0 0 14px rgba(232, 64, 87, 0.35);
+  }
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.7rem;
+}
+
+/* ---- Inputs -------------------------------------------------------------- */
+input[type='text'],
+input:not([type]),
+input[type='search'] {
+  font: inherit;
+  width: 100%;
+  color: var(--text);
+  background: rgba(1, 10, 19, 0.7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.9rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &::placeholder {
+    color: var(--text-dim);
+  }
+
+  &:focus {
+    border-color: var(--blue-2);
+    box-shadow: var(--glow-blue);
+  }
+}
+
+.field {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+
+  input {
+    flex: 1;
+  }
+}
+
+label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+/* ---- Misc --------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.3);
+
+  &.gold {
+    color: var(--gold-2);
+    border-color: var(--gold-4);
+  }
+
+  &.blue {
+    color: var(--blue-2);
+    border-color: var(--blue-4);
+  }
+
+  &.red {
+    color: var(--red-team);
+    border-color: rgba(232, 64, 87, 0.5);
+  }
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--gold-4);
+  background: var(--bg-3);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.avatar-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.empty {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed var(--gold-4);
+  border-radius: var(--radius);
+  padding: 0.15rem 0.5rem;
+  color: var(--gold-2);
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+ul.clean {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.35s ease both;
+}

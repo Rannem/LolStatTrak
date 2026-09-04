@@ -1,1 +1,28 @@
-<router-outlet />
+@if (auth.isAuthenticated()) {
+  <header class="topbar">
+    <a routerLink="/clubs" class="brand">
+      <span class="brand-mark">⚔</span>
+      <span class="brand-text">LolStat<em>Trak</em></span>
+    </a>
+
+    <nav class="nav">
+      <a routerLink="/clubs">Clubs</a>
+    </nav>
+
+    <div class="user">
+      @if (auth.user(); as user) {
+        @if (user.avatarUrl) {
+          <img class="avatar avatar-sm" [src]="user.avatarUrl" [alt]="user.discordUsername" />
+        } @else {
+          <span class="avatar avatar-sm avatar-fallback">{{ user.discordUsername.charAt(0).toUpperCase() }}</span>
+        }
+        <span class="username">{{ user.discordUsername }}</span>
+      }
+      <button class="btn-ghost btn-sm" (click)="logout()">Log out</button>
+    </div>
+  </header>
+}
+
+<main>
+  <router-outlet />
+</main>

@@ -13,7 +13,7 @@ public record SetBannedChampionsRequest(int[] ChampionIds);
 [ApiController]
 [Route("api/clubs")]
 [Authorize]
-public class ClubsController(ClubRepository clubRepository) : ControllerBase
+public class ClubsController(ClubRepository clubRepository, LobbyRepository lobbyRepository) : ControllerBase
 {
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Missing user id claim"));
@@ -21,6 +21,49 @@ public class ClubsController(ClubRepository clubRepository) : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetMyClubs()
         => Ok(await clubRepository.GetForUserAsync(CurrentUserId));
+
+    /// <summary>Club header info plus the caller's own role, so the UI can show/hide admin tools.</summary>
+    [HttpGet("{clubId:guid}")]
+    public async Task<IActionResult> Get(Guid clubId)
+    {
+        var membership = await clubRepository.GetMembershipAsync(clubId, CurrentUserId);
+        if (membership is not { Status: ClubMembershipStatus.Approved })
+            return Forbid();
+
+        var club = await clubRepository.GetAsync(clubId);
+        if (club is null)
+            return NotFound();
+
+        return Ok(new
+        {
+            club.Id,
+            club.Name,
+            club.Slug,
+            club.OwnerUserId,
+            club.InviteCode,
+            club.CreatedAt,
+            MyRole = membership.Role,
+            CanManage = membership.Role is ClubMemberRole.Mod or ClubMemberRole.Admin or ClubMemberRole.Owner,
+        });
+    }
+
+    [HttpGet("{clubId:guid}/members")]
+    public async Task<IActionResult> GetMembers(Guid clubId)
+    {
+        if (!await IsApprovedMemberAsync(clubId))
+            return Forbid();
+
+        return Ok(await clubRepository.GetMembersAsync(clubId));
+    }
+
+    [HttpGet("{clubId:guid}/lobbies")]
+    public async Task<IActionResult> GetLobbies(Guid clubId)
+    {
+        if (!await IsApprovedMemberAsync(clubId))
+            return Forbid();
+
+        return Ok(await lobbyRepository.GetForClubAsync(clubId));
+    }
 
     /// <summary>Anyone can create a club; the creator becomes its Owner.</summary>
     [HttpPost]
@@ -83,6 +126,12 @@ public class ClubsController(ClubRepository clubRepository) : ControllerBase
 
         await clubRepository.SetBannedChampionsAsync(clubId, request.ChampionIds);
         return Ok();
+    }
+
+    private async Task<bool> IsApprovedMemberAsync(Guid clubId)
+    {
+        var membership = await clubRepository.GetMembershipAsync(clubId, CurrentUserId);
+        return membership is { Status: ClubMembershipStatus.Approved };
     }
 
     private async Task<bool> IsAdminOrModAsync(Guid clubId)

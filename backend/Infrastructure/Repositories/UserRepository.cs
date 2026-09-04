@@ -6,6 +6,19 @@ namespace LolStatTrak.Infrastructure.Repositories;
 
 public class UserRepository(NpgsqlConnectionFactory connectionFactory)
 {
+    public async Task<User?> GetByIdAsync(Guid id)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QuerySingleOrDefaultAsync<User>(
+            """
+            select id "Id", discord_id "DiscordId", discord_username "DiscordUsername",
+                   avatar_url "AvatarUrl", riot_puuid "RiotPuuid", riot_game_name "RiotGameName",
+                   riot_tag_line "RiotTagLine", created_at "CreatedAt"
+            from users where id = @id
+            """,
+            new { id });
+    }
+
     public async Task<User?> GetByDiscordIdAsync(string discordId)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();

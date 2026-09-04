@@ -32,9 +32,11 @@ builder.Services.Configure<RiotApiOptions>(options =>
     options.RegionalRouting = builder.Configuration["RIOT_REGION"] ?? builder.Configuration["RiotApi:RegionalRouting"] ?? "europe";
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(o =>
+    o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddOpenApi();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR().AddJsonProtocol(o =>
+    o.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 // Trust X-Forwarded-Proto/-For/-Host from Caddy so the app correctly sees "https" and the
 // original client info, even though the backend itself only ever receives plain HTTP on
@@ -70,6 +72,11 @@ builder.Services.AddScoped<RandomizerService>();
 builder.Services.AddScoped<LobbyMatchCorrelationService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddHttpClient<RiotApiClient>();
+builder.Services.AddHttpClient(nameof(ChampionCatalogService));
+// Singleton so the Data Dragon champion cache is shared across all requests.
+builder.Services.AddSingleton(sp => new ChampionCatalogService(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(ChampionCatalogService)),
+    sp.GetRequiredService<ILogger<ChampionCatalogService>>()));
 
 builder.Services.AddDatabaseMigrations(connectionString);
 

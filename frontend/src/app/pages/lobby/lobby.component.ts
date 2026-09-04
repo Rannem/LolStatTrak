@@ -1,64 +1,393 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
-import { LobbyPlayer } from '../../core/models/models';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Observable, Subscription } from 'rxjs';
+import { Lobby, LobbyPlayer, Team } from '../../core/models/models';
+import { AuthService } from '../../core/services/auth.service';
+import { ChampionService } from '../../core/services/champion.service';
 import { LobbyHubService } from '../../core/services/lobby-hub.service';
 import { LobbyService } from '../../core/services/lobby.service';
 
 @Component({
   selector: 'app-lobby',
   standalone: true,
-  imports: [CommonModule],
+  imports: [RouterLink, NgTemplateOutlet],
   template: `
-    <h1>Lobby</h1>
+    <div class="page fade-up">
+      @if (lobby(); as lobby) {
+        <a [routerLink]="['/clubs', lobby.clubId]" class="back">‹ Back to club</a>
+      }
 
-    <button (click)="join()">Join lobby</button>
-    <button (click)="roll()">Roll teams &amp; champions</button>
-    <button (click)="markPlayed()">Mark as played (fetch stats)</button>
+      <div class="page-header">
+        <div>
+          <div class="eyebrow">Custom ARAM</div>
+          <h1>Lobby</h1>
+          <div class="row small muted">
+            <span class="badge" [class.blue]="lobby()?.status === 'Open'" [class.gold]="lobby()?.status === 'Rolled'">{{ lobby()?.status ?? '…' }}</span>
+            <span>{{ players().length }} player{{ players().length === 1 ? '' : 's' }}</span>
+            <span class="live" [class.on]="connected()">● {{ connected() ? 'live' : 'connecting' }}</span>
+          </div>
+        </div>
 
-    <table>
-      <thead>
-        <tr><th>User</th><th>Team</th><th>Champion</th></tr>
-      </thead>
-      <tbody>
-        @for (player of players(); track player.userId) {
-          <tr>
-            <td>{{ player.userId }}</td>
-            <td>{{ player.assignedTeam }}</td>
-            <td>{{ player.assignedChampionId }}</td>
-          </tr>
+        <div class="row">
+          @if (!amIn()) {
+            <button class="btn-accent" (click)="join()" [disabled]="busy()">Join lobby</button>
+          }
+          <button class="btn-primary" (click)="roll()" [disabled]="busy() || players().length === 0">
+            🎲 {{ isRolled() ? 'Re-roll' : 'Roll teams & champions' }}
+          </button>
+          @if (isRolled()) {
+            <button class="btn-ghost" (click)="markPlayed()" [disabled]="busy()">Mark as played</button>
+          }
+        </div>
+      </div>
+
+      @if (error()) {
+        <div class="card error">{{ error() }}</div>
+      }
+
+      @if (isRolled()) {
+        <div class="teams">
+          <section class="team blue">
+            <header><span class="team-name">Blue Team</span><span class="muted">{{ team('Blue').length }}</span></header>
+            <div class="team-players">
+              @for (p of team('Blue'); track p.userId) {
+                <ng-container *ngTemplateOutlet="playerCard; context: { $implicit: p }" />
+              }
+            </div>
+          </section>
+
+          <div class="vs">VS</div>
+
+          <section class="team red">
+            <header><span class="team-name">Red Team</span><span class="muted">{{ team('Red').length }}</span></header>
+            <div class="team-players">
+              @for (p of team('Red'); track p.userId) {
+                <ng-container *ngTemplateOutlet="playerCard; context: { $implicit: p }" />
+              }
+            </div>
+          </section>
+        </div>
+      } @else {
+        <div class="card">
+          <h2>Waiting for players</h2>
+          @if (players().length === 0) {
+            <div class="empty">Nobody's in yet. Share this page's link with your club and hit Join.</div>
+          } @else {
+            <ul class="clean waiting">
+              @for (p of players(); track p.userId) {
+                <li>
+                  <img class="avatar" [src]="p.avatarUrl || fallbackAvatar" [alt]="p.discordUsername" />
+                  <span>{{ p.discordUsername }}</span>
+                  @if (p.userId === auth.user()?.id) {
+                    <span class="badge blue">you</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </div>
+
+    <ng-template #playerCard let-p>
+      @let champ = champions.get(p.assignedChampionId);
+      <div class="player-card" [style.background-image]="champ ? 'url(' + champ.loadingArtUrl + ')' : ''">
+        <div class="player-card-shade"></div>
+        <div class="player-card-body">
+          <div class="who">
+            <img class="avatar avatar-sm" [src]="p.avatarUrl || fallbackAvatar" [alt]="p.discordUsername" />
+            <span class="pname">{{ p.discordUsername }}</span>
+            @if (p.userId === auth.user()?.id) {
+              <span class="badge blue">you</span>
+            }
+          </div>
+          <div class="champ">
+            @if (champ) {
+              <img class="champ-icon" [src]="champ.iconUrl" [alt]="champ.name" />
+              <div>
+                <div class="champ-name">{{ champ.name }}</div>
+                <div class="champ-title">{{ champ.title }}</div>
+              </div>
+            } @else {
+              <div class="champ-name muted">Champion #{{ p.assignedChampionId }}</div>
+            }
+          </div>
+        </div>
+      </div>
+    </ng-template>
+  `,
+  styles: `
+    .back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .small {
+      font-size: 0.8rem;
+    }
+
+    .live {
+      color: var(--text-dim);
+      &.on {
+        color: var(--success);
+      }
+    }
+
+    .error {
+      border-color: var(--danger);
+      color: var(--danger);
+      margin-bottom: 1.25rem;
+    }
+
+    .waiting li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+    }
+
+    .waiting li + li {
+      border-top: 1px solid var(--border);
+    }
+
+    .teams {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1.25rem;
+      align-items: start;
+
+      @media (max-width: 860px) {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .vs {
+      align-self: center;
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 1.6rem;
+      color: var(--gold-3);
+      text-shadow: var(--glow-gold);
+      padding: 0 0.5rem;
+
+      @media (max-width: 860px) {
+        text-align: center;
+      }
+    }
+
+    .team {
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.9rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid;
+      }
+
+      .team-name {
+        font-family: 'Cinzel', serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 0.95rem;
+      }
+
+      &.blue {
+        border-color: rgba(30, 144, 255, 0.45);
+        header {
+          border-color: var(--blue-team);
         }
-      </tbody>
-    </table>
+        .team-name {
+          color: #7fc0ff;
+        }
+      }
+
+      &.red {
+        border-color: rgba(232, 64, 87, 0.45);
+        header {
+          border-color: var(--red-team);
+        }
+        .team-name {
+          color: #ff8a9b;
+        }
+      }
+    }
+
+    .team-players {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .player-card {
+      position: relative;
+      min-height: 120px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--gold-4);
+      background-color: var(--bg-3);
+      background-size: cover;
+      background-position: center 20%;
+      transition: transform 0.15s, box-shadow 0.15s;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--glow-gold);
+      }
+    }
+
+    .player-card-shade {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(1, 10, 19, 0.95) 0%, rgba(1, 10, 19, 0.75) 55%, rgba(1, 10, 19, 0.15) 100%);
+    }
+
+    .player-card-body {
+      position: relative;
+      padding: 0.9rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .who {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .pname {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .champ {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .champ-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 6px;
+      border: 2px solid var(--gold-3);
+    }
+
+    .champ-name {
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--gold-1);
+    }
+
+    .champ-title {
+      font-size: 0.72rem;
+      color: var(--gold-2);
+      text-transform: capitalize;
+    }
   `,
 })
 export class LobbyComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly lobbyService = inject(LobbyService);
   private readonly hub = inject(LobbyHubService);
+  protected readonly auth = inject(AuthService);
+  protected readonly champions = inject(ChampionService);
 
   protected lobbyId = '';
+  protected readonly lobby = signal<Lobby | null>(null);
   protected readonly players = signal<LobbyPlayer[]>([]);
+  protected readonly connected = signal(false);
+  protected readonly busy = signal(false);
+  protected readonly error = signal('');
+
+  protected readonly fallbackAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+  protected readonly isRolled = computed(() => this.players().some((p) => p.assignedTeam != null));
+  protected readonly amIn = computed(() => this.players().some((p) => p.userId === this.auth.user()?.id));
+
+  private subs = new Subscription();
 
   async ngOnInit(): Promise<void> {
     this.lobbyId = this.route.snapshot.paramMap.get('lobbyId') ?? '';
-    await this.hub.connectAndJoin(this.lobbyId);
-    this.hub.lobbyRolled$.subscribe((players) => this.players.set(players));
+    this.champions.ensureLoaded();
+
+    this.lobbyService.get(this.lobbyId).subscribe((state) => {
+      this.lobby.set(state.lobby);
+      this.players.set(state.players);
+    });
+
+    this.subs.add(this.hub.lobbyRolled$.subscribe((players) => {
+      this.players.set(players);
+      this.lobby.update((l) => (l ? { ...l, status: 'Rolled' } : l));
+    }));
+    this.subs.add(this.hub.playerJoined$.subscribe((evt) => {
+      if (evt.lobbyId === this.lobbyId) this.players.set(evt.players);
+    }));
+
+    try {
+      await this.hub.connectAndJoin(this.lobbyId);
+      this.connected.set(true);
+    } catch {
+      this.connected.set(false);
+    }
   }
 
   async ngOnDestroy(): Promise<void> {
+    this.subs.unsubscribe();
     await this.hub.leave(this.lobbyId);
   }
 
+  protected team(team: Team): LobbyPlayer[] {
+    return this.players().filter((p) => p.assignedTeam === team);
+  }
+
   join(): void {
-    this.lobbyService.join(this.lobbyId).subscribe((players) => this.players.set(players));
+    this.run(this.lobbyService.join(this.lobbyId), (players) => this.players.set(players));
   }
 
   roll(): void {
-    this.lobbyService.roll(this.lobbyId).subscribe((players) => this.players.set(players));
+    this.run(this.lobbyService.roll(this.lobbyId), (players) => {
+      this.players.set(players);
+      this.lobby.update((l) => (l ? { ...l, status: 'Rolled' } : l));
+    });
   }
 
   markPlayed(): void {
-    this.lobbyService.markPlayed(this.lobbyId).subscribe();
+    this.run(this.lobbyService.markPlayed(this.lobbyId), (res) => {
+      this.lobby.update((l) => (l ? { ...l, status: 'Played' } : l));
+      if (!res.matchId) {
+        this.error.set('Marked as played, but no matching Riot game was found yet (players may need linked Riot accounts).');
+      }
+    });
+  }
+
+  private run<T>(obs: Observable<T>, onNext: (v: T) => void): void {
+    this.busy.set(true);
+    this.error.set('');
+    obs.subscribe({
+      next: (v) => {
+        onNext(v);
+        this.busy.set(false);
+      },
+      error: (e: unknown) => {
+        const msg = (e as { error?: { title?: string; detail?: string } })?.error;
+        this.error.set(msg?.detail ?? msg?.title ?? 'Something went wrong. Try again.');
+        this.busy.set(false);
+      },
+    });
   }
 }

@@ -4,6 +4,17 @@ using LolStatTrak.Infrastructure.Data;
 
 namespace LolStatTrak.Infrastructure.Repositories;
 
+/// <summary>Lobby player enriched with Discord display info for the UI.</summary>
+public class LobbyPlayerView
+{
+    public Guid LobbyId { get; set; }
+    public Guid UserId { get; set; }
+    public string DiscordUsername { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public LobbyTeam? AssignedTeam { get; set; }
+    public int? AssignedChampionId { get; set; }
+}
+
 public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
 {
     public async Task<Lobby> CreateAsync(Guid clubId, Guid createdByUserId)
@@ -52,6 +63,37 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
             from lobby_players where lobby_id = @lobbyId
             """,
             new { lobbyId });
+    }
+
+    /// <summary>Players joined with their Discord identity, for display in the lobby UI.</summary>
+    public async Task<IEnumerable<LobbyPlayerView>> GetPlayerViewsAsync(Guid lobbyId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QueryAsync<LobbyPlayerView>(
+            """
+            select p.lobby_id "LobbyId", p.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", p.assigned_team "AssignedTeam",
+                   p.assigned_champion_id "AssignedChampionId"
+            from lobby_players p
+            join users u on u.id = p.user_id
+            where p.lobby_id = @lobbyId
+            order by p.assigned_team nulls last, u.discord_username
+            """,
+            new { lobbyId });
+    }
+
+    public async Task<IEnumerable<Lobby>> GetForClubAsync(Guid clubId, int limit = 20)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QueryAsync<Lobby>(
+            """
+            select id "Id", club_id "ClubId", created_by_user_id "CreatedByUserId",
+                   status "Status", created_at "CreatedAt"
+            from lobbies where club_id = @clubId
+            order by created_at desc
+            limit @limit
+            """,
+            new { clubId, limit });
     }
 
     public async Task SaveRollAsync(Guid lobbyId, IEnumerable<LobbyPlayer> players)

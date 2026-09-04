@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using LolStatTrak.Api.Auth;
 using LolStatTrak.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LolStatTrak.Api.Controllers;
@@ -60,6 +62,26 @@ public class AuthController(UserRepository userRepository, JwtTokenService jwtTo
     {
         Response.Cookies.Delete("lst_session");
         return Ok();
+    }
+
+    /// <summary>Returns the signed-in user's profile; 401 if the session cookie is missing/expired.</summary>
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> Me()
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Missing user id claim"));
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            return Unauthorized();
+
+        return Ok(new
+        {
+            user.Id,
+            user.DiscordUsername,
+            user.AvatarUrl,
+            user.RiotGameName,
+            user.RiotTagLine,
+        });
     }
 
     private const string ClaimTypesDiscordId = "urn:discord:id";

@@ -9,7 +9,7 @@ import { LobbyPlayer } from '../models/models';
 export class LobbyHubService {
   private connection?: signalR.HubConnection;
 
-  readonly playerJoined$ = new Subject<{ lobbyId: string; userId: string }>();
+  readonly playerJoined$ = new Subject<{ lobbyId: string; userId: string; players: LobbyPlayer[] }>();
   readonly lobbyRolled$ = new Subject<LobbyPlayer[]>();
 
   async connectAndJoin(lobbyId: string): Promise<void> {

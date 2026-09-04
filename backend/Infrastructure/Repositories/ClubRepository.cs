@@ -4,6 +4,18 @@ using LolStatTrak.Infrastructure.Data;
 
 namespace LolStatTrak.Infrastructure.Repositories;
 
+/// <summary>Club member enriched with Discord display info for the UI.</summary>
+public class ClubMemberView
+{
+    public Guid ClubId { get; set; }
+    public Guid UserId { get; set; }
+    public string DiscordUsername { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
+    public ClubMemberRole Role { get; set; }
+    public ClubMembershipStatus Status { get; set; }
+    public DateTimeOffset JoinedAt { get; set; }
+}
+
 public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
 {
     public async Task<Club> CreateAsync(string name, string slug, Guid ownerUserId, string inviteCode)
@@ -81,15 +93,46 @@ public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
             new { clubId, userId, role = (int)ClubMemberRole.Member, status = (int)ClubMembershipStatus.Pending });
     }
 
-    public async Task<IEnumerable<ClubMember>> GetPendingRequestsAsync(Guid clubId)
+    public async Task<IEnumerable<ClubMemberView>> GetPendingRequestsAsync(Guid clubId)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();
-        return await conn.QueryAsync<ClubMember>(
+        return await conn.QueryAsync<ClubMemberView>(
             """
-            select club_id "ClubId", user_id "UserId", role "Role", status "Status", joined_at "JoinedAt"
-            from club_members where club_id = @clubId and status = @pending
+            select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+            from club_members m
+            join users u on u.id = m.user_id
+            where m.club_id = @clubId and m.status = @pending
+            order by m.joined_at
             """,
             new { clubId, pending = (int)ClubMembershipStatus.Pending });
+    }
+
+    public async Task<IEnumerable<ClubMemberView>> GetMembersAsync(Guid clubId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QueryAsync<ClubMemberView>(
+            """
+            select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+            from club_members m
+            join users u on u.id = m.user_id
+            where m.club_id = @clubId and m.status = @approved
+            order by m.role desc, u.discord_username
+            """,
+            new { clubId, approved = (int)ClubMembershipStatus.Approved });
+    }
+
+    public async Task<Club?> GetAsync(Guid clubId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QuerySingleOrDefaultAsync<Club>(
+            """
+            select id "Id", name "Name", slug "Slug", owner_user_id "OwnerUserId",
+                   invite_code "InviteCode", created_at "CreatedAt"
+            from clubs where id = @clubId
+            """,
+            new { clubId });
     }
 
     public async Task ApproveMemberAsync(Guid clubId, Guid userId)

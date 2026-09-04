@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Lobby, LobbyPlayer } from '../models/models';
+import { Lobby, LobbyPlayer, LobbyState } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class LobbyService {
@@ -10,6 +10,10 @@ export class LobbyService {
 
   createLobby(clubId: string) {
     return this.http.post<Lobby>(this.base, { clubId }, { withCredentials: true });
+  }
+
+  get(lobbyId: string) {
+    return this.http.get<LobbyState>(`${this.base}/${lobbyId}`, { withCredentials: true });
   }
 
   join(lobbyId: string) {

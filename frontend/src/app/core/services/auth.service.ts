@@ -2,19 +2,20 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { catchError, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Club } from '../models/models';
+import { User } from '../models/models';
 
 /**
- * Tracks whether the user is logged in by probing an authenticated endpoint on startup,
+ * Tracks whether the user is logged in by probing /auth/me on startup,
  * since auth state itself lives in the httpOnly session cookie set by the Discord callback.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
 
-  private readonly _isAuthenticated = signal<boolean | null>(null); // null = not yet checked
-  readonly isAuthenticated = computed(() => this._isAuthenticated() === true);
-  readonly checked = computed(() => this._isAuthenticated() !== null);
+  private readonly _user = signal<User | null | undefined>(undefined); // undefined = not yet checked
+  readonly user = computed(() => this._user() ?? null);
+  readonly isAuthenticated = computed(() => !!this._user());
+  readonly checked = computed(() => this._user() !== undefined);
 
   loginWithDiscord(): void {
     // Always land on /clubs after a successful login, regardless of which page the
@@ -26,17 +27,17 @@ export class AuthService {
 
   logout() {
     return this.http.post(`${environment.apiBaseUrl}/auth/logout`, {}, { withCredentials: true }).pipe(
-      tap(() => this._isAuthenticated.set(false)),
+      tap(() => this._user.set(null)),
     );
   }
 
-  /** Calls a cheap authenticated endpoint (my clubs) purely to confirm the session cookie is valid. */
+  /** Resolves the current user from the session cookie; null when not signed in. */
   checkSession() {
-    return this.http.get<Club[]>(`${environment.apiBaseUrl}/clubs`, { withCredentials: true }).pipe(
-      tap(() => this._isAuthenticated.set(true)),
+    return this.http.get<User>(`${environment.apiBaseUrl}/auth/me`, { withCredentials: true }).pipe(
+      tap((user) => this._user.set(user)),
       catchError(() => {
-        this._isAuthenticated.set(false);
-        return of([]);
+        this._user.set(null);
+        return of(null);
       }),
     );
   }

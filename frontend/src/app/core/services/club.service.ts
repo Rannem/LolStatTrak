@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Club, ClubMember } from '../models/models';
+import { Club, ClubDetail, ClubMember, Lobby } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class ClubService {
@@ -10,6 +10,18 @@ export class ClubService {
 
   getMyClubs() {
     return this.http.get<Club[]>(this.base, { withCredentials: true });
+  }
+
+  getClub(clubId: string) {
+    return this.http.get<ClubDetail>(`${this.base}/${clubId}`, { withCredentials: true });
+  }
+
+  getMembers(clubId: string) {
+    return this.http.get<ClubMember[]>(`${this.base}/${clubId}/members`, { withCredentials: true });
+  }
+
+  getLobbies(clubId: string) {
+    return this.http.get<Lobby[]>(`${this.base}/${clubId}/lobbies`, { withCredentials: true });
   }
 
   createClub(name: string) {
