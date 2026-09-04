@@ -17,12 +17,12 @@ services:
     depends_on:
       - postgres
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Database=lolstattrak;Username=lolstattrak;Password=lolstattrak"
-      Jwt__SigningKey: "local-dev-signing-key-change-me"
-      Discord__ClientId: ""
-      Discord__ClientSecret: ""
-      RiotApi__ApiKey: ""
-      Cors__AllowedOrigins__0: "http://localhost:8080"
+      DATABASE_URL: "postgres://lolstattrak:lolstattrak@postgres:5432/lolstattrak"
+      JWT_SIGNING_KEY: "local-dev-signing-key-change-me"
+      DISCORD_CLIENT_ID: ""
+      DISCORD_CLIENT_SECRET: ""
+      RIOT_API_KEY: ""
+      CORS_ALLOWED_ORIGINS: "http://localhost:8080"
     ports:
       - "5000:8080"
 

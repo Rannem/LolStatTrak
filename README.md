@@ -19,11 +19,11 @@ post-game stat tracking via the Riot API.
 ```
 cd backend
 dotnet user-secrets init --project Api
-dotnet user-secrets set "ConnectionStrings:Postgres" "Host=localhost;Database=lolstattrak;Username=lolstattrak;Password=lolstattrak" --project Api
-dotnet user-secrets set "Jwt:SigningKey" "some-long-local-dev-secret" --project Api
-dotnet user-secrets set "Discord:ClientId" "..." --project Api
-dotnet user-secrets set "Discord:ClientSecret" "..." --project Api
-dotnet user-secrets set "RiotApi:ApiKey" "..." --project Api
+dotnet user-secrets set "DATABASE_URL" "postgres://lolstattrak:lolstattrak@localhost:5432/lolstattrak" --project Api
+dotnet user-secrets set "JWT_SIGNING_KEY" "some-long-local-dev-secret" --project Api
+dotnet user-secrets set "DISCORD_CLIENT_ID" "..." --project Api
+dotnet user-secrets set "DISCORD_CLIENT_SECRET" "..." --project Api
+dotnet user-secrets set "RIOT_API_KEY" "..." --project Api
 dotnet run --project Api
 ```
 Migrations run automatically on startup.
@@ -48,14 +48,36 @@ group). Personal keys don't expire daily like the default dev key and are
 explicitly allowed for this use case — no rotation mechanism is needed.
 A Production key is only relevant if the app is ever opened to the public.
 
-## Deploying to Railway
-1. Create a Postgres database service (managed by Railway).
-2. Create a `backend` service from `deploy/Dockerfile.backend`, with env vars:
-   `ConnectionStrings__Postgres`, `Jwt__SigningKey`, `Discord__ClientId`,
-   `Discord__ClientSecret`, `RiotApi__ApiKey`, `Cors__AllowedOrigins__0`.
-3. Create a `frontend` service from `deploy/Dockerfile.frontend`, with env vars:
-   `BACKEND_INTERNAL_URL` set to the backend service's private Railway hostname
-   (e.g. `backend.railway.internal:8080`), and `PORT` (Railway sets this
-   automatically).
-4. Point your public domain at the `frontend` service only — the backend stays
-   on the private network.
+## Deploying to Railway (minimal setup)
+
+1. **Add a Postgres plugin** to the project (Railway → New → Database → PostgreSQL).
+   Railway auto-injects `DATABASE_URL` on that service — you don't need to build a
+   connection string by hand.
+2. **Create the `backend` service** from `deploy/Dockerfile.backend`. Set these variables
+   (use Railway's variable-reference picker, `${{ServiceName.VAR}}`, wherever possible so
+   values stay in sync automatically instead of being copy-pasted):
+
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | reference → `${{Postgres.DATABASE_URL}}` |
+   | `JWT_SIGNING_KEY` | any long random string (generate once, e.g. `openssl rand -base64 48`) |
+   | `DISCORD_CLIENT_ID` | from the Discord Developer Portal |
+   | `DISCORD_CLIENT_SECRET` | from the Discord Developer Portal |
+   | `RIOT_API_KEY` | your Riot **Personal** API key |
+   | `CORS_ALLOWED_ORIGINS` | reference → `${{frontend.RAILWAY_PUBLIC_DOMAIN}}` (prefixed with `https://`) |
+
+3. **Create the `frontend` service** from `deploy/Dockerfile.frontend`. Set:
+
+   | Variable | Value |
+   |---|---|
+   | `BACKEND_INTERNAL_URL` | reference → `${{backend.RAILWAY_PRIVATE_DOMAIN}}:8080` |
+
+   `PORT` is set automatically by Railway — no action needed.
+4. **Expose only the `frontend` service publicly** (Settings → Networking → Generate
+   Domain). Leave the `backend` service private — Caddy is the only public entrypoint.
+5. In the **Discord Developer Portal**, set the OAuth2 redirect URI to
+   `https://<your-frontend-domain>/signin-discord`.
+
+That's it — no manual connection strings, and the two Railway variable references above
+mean the frontend/backend/CORS URLs stay correct automatically if a domain ever changes.
+

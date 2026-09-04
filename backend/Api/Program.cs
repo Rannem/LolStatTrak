@@ -16,20 +16,33 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("Postgres")
-    ?? throw new InvalidOperationException("Missing ConnectionStrings:Postgres");
+// Flat, Railway-friendly env vars. DATABASE_URL is what Railway's Postgres plugin injects
+// natively (postgres://user:pass@host:port/db) — no manual connection-string assembly needed.
+var connectionString = ResolvePostgresConnectionString(builder.Configuration)
+    ?? throw new InvalidOperationException("Missing DATABASE_URL (or ConnectionStrings:Postgres) configuration.");
 
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-builder.Services.Configure<RiotApiOptions>(builder.Configuration.GetSection(RiotApiOptions.SectionName));
+builder.Services.Configure<JwtOptions>(options =>
+{
+    options.SigningKey = builder.Configuration["JWT_SIGNING_KEY"] ?? builder.Configuration["Jwt:SigningKey"] ?? string.Empty;
+});
+builder.Services.Configure<RiotApiOptions>(options =>
+{
+    options.ApiKey = builder.Configuration["RIOT_API_KEY"] ?? builder.Configuration["RiotApi:ApiKey"] ?? string.Empty;
+    options.RegionalRouting = builder.Configuration["RIOT_REGION"] ?? builder.Configuration["RiotApi:RegionalRouting"] ?? "europe";
+});
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 
+// Comma-separated list, e.g. "https://lolstattrak.up.railway.app" — the one public frontend URL.
+var allowedOrigins = (builder.Configuration["CORS_ALLOWED_ORIGINS"] ?? builder.Configuration["Cors:AllowedOrigins:0"] ?? "")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy => policy
-        .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+        .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials());
@@ -58,8 +71,8 @@ builder.Services.AddAuthentication(options =>
     .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme) // temporary cookie during the OAuth handshake only
     .AddOAuth("Discord", options =>
     {
-        options.ClientId = builder.Configuration["Discord:ClientId"] ?? string.Empty;
-        options.ClientSecret = builder.Configuration["Discord:ClientSecret"] ?? string.Empty;
+        options.ClientId = builder.Configuration["DISCORD_CLIENT_ID"] ?? builder.Configuration["Discord:ClientId"] ?? string.Empty;
+        options.ClientSecret = builder.Configuration["DISCORD_CLIENT_SECRET"] ?? builder.Configuration["Discord:ClientSecret"] ?? string.Empty;
         options.CallbackPath = "/signin-discord";
         options.AuthorizationEndpoint = "https://discord.com/api/oauth2/authorize";
         options.TokenEndpoint = "https://discord.com/api/oauth2/token";
@@ -92,13 +105,13 @@ builder.Services.AddAuthentication(options =>
     })
     .AddJwtBearer(options =>
     {
-        var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
-        var signingKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("Missing Jwt:SigningKey");
+        var signingKey = builder.Configuration["JWT_SIGNING_KEY"] ?? builder.Configuration["Jwt:SigningKey"]
+            ?? throw new InvalidOperationException("Missing JWT_SIGNING_KEY configuration.");
 
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
+            ValidIssuer = "LolStatTrak",
+            ValidAudience = "LolStatTrak",
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
             ValidateIssuer = true,
             ValidateAudience = true,
@@ -142,3 +155,31 @@ app.MapControllers();
 app.MapHub<LobbyHub>("/hubs/lobby");
 
 app.Run();
+
+/// <summary>
+/// Accepts either Railway's native DATABASE_URL ("postgres://user:pass@host:port/db") or a
+/// classic ConnectionStrings:Postgres value, so setup only ever needs one variable reference.
+/// </summary>
+static string? ResolvePostgresConnectionString(IConfiguration configuration)
+{
+    var explicitConnectionString = configuration.GetConnectionString("Postgres");
+    if (!string.IsNullOrEmpty(explicitConnectionString))
+        return explicitConnectionString;
+
+    var databaseUrl = configuration["DATABASE_URL"];
+    if (string.IsNullOrEmpty(databaseUrl))
+        return null;
+
+    var uri = new Uri(databaseUrl);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var builder = new Npgsql.NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+        Database = uri.AbsolutePath.TrimStart('/'),
+        Username = Uri.UnescapeDataString(userInfo[0]),
+        Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty,
+        SslMode = Npgsql.SslMode.Prefer,
+    };
+    return builder.ConnectionString;
+}
