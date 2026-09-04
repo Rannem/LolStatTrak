@@ -4,11 +4,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY backend/*.sln .
+COPY backend/*.sln* .
 COPY backend/Api/*.csproj Api/
 COPY backend/Domain/*.csproj Domain/
 COPY backend/Infrastructure/*.csproj Infrastructure/
-RUN dotnet restore
+RUN dotnet restore LolStatTrak.slnx
 
 COPY backend/ .
 RUN dotnet publish Api/LolStatTrak.Api.csproj -c Release -o /app/publish --no-restore
