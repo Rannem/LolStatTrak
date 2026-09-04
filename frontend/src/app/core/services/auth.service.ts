@@ -17,7 +17,10 @@ export class AuthService {
   readonly checked = computed(() => this._isAuthenticated() !== null);
 
   loginWithDiscord(): void {
-    const returnUrl = encodeURIComponent(window.location.pathname);
+    // Always land on /clubs after a successful login, regardless of which page the
+    // button was clicked from (e.g. /login itself, which doesn't know how to react
+    // to "now authenticated" on its own).
+    const returnUrl = encodeURIComponent('/clubs');
     window.location.href = `${environment.apiBaseUrl}/auth/discord/login?returnUrl=${returnUrl}`;
   }
 
