@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Club, ClubDetail, ClubMember, Lobby } from '../models/models';
+import { AuditEntry, Club, ClubDetail, ClubMember, ClubRole, Lobby, MatchSummary } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class ClubService {
@@ -50,5 +50,33 @@ export class ClubService {
 
   setBannedChampions(clubId: string, championIds: number[]) {
     return this.http.put(`${this.base}/${clubId}/banned-champions`, { championIds }, { withCredentials: true });
+  }
+
+  getMatches(clubId: string) {
+    return this.http.get<MatchSummary[]>(`${this.base}/${clubId}/matches`, { withCredentials: true });
+  }
+
+  deleteMatch(clubId: string, matchId: string) {
+    return this.http.delete(`${this.base}/${clubId}/matches/${matchId}`, { withCredentials: true });
+  }
+
+  deleteLobby(clubId: string, lobbyId: string) {
+    return this.http.delete(`${this.base}/${clubId}/lobbies/${lobbyId}`, { withCredentials: true });
+  }
+
+  getAudit(clubId: string) {
+    return this.http.get<AuditEntry[]>(`${this.base}/${clubId}/audit`, { withCredentials: true });
+  }
+
+  setMemberRole(clubId: string, userId: string, role: ClubRole) {
+    return this.http.put(`${this.base}/${clubId}/members/${userId}/role`, { role }, { withCredentials: true });
+  }
+
+  removeMember(clubId: string, userId: string) {
+    return this.http.delete(`${this.base}/${clubId}/members/${userId}`, { withCredentials: true });
+  }
+
+  deleteClub(clubId: string) {
+    return this.http.delete(`${this.base}/${clubId}`, { withCredentials: true });
   }
 }

@@ -1,4 +1,5 @@
 using LolStatTrak.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LolStatTrak.Api.Controllers;
@@ -6,6 +7,7 @@ namespace LolStatTrak.Api.Controllers;
 /// <summary>Public champion list (from Data Dragon) used by the ban picker and lobby cards.</summary>
 [ApiController]
 [Route("api/champions")]
+[Authorize]
 public class ChampionsController(ChampionCatalogService championCatalog) : ControllerBase
 {
     [HttpGet]

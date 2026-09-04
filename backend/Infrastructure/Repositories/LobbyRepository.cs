@@ -11,6 +11,8 @@ public class LobbyPlayerView
     public Guid UserId { get; set; }
     public string DiscordUsername { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? RiotGameName { get; set; }
+    public string? RiotTagLine { get; set; }
     public LobbyTeam? AssignedTeam { get; set; }
     public int? AssignedChampionId { get; set; }
 }
@@ -72,7 +74,7 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QueryAsync<LobbyPlayerView>(
             """
             select p.lobby_id "LobbyId", p.user_id "UserId", u.discord_username "DiscordUsername",
-                   u.avatar_url "AvatarUrl", p.assigned_team "AssignedTeam",
+                   u.avatar_url "AvatarUrl", u.riot_game_name "RiotGameName", u.riot_tag_line "RiotTagLine", p.assigned_team "AssignedTeam",
                    p.assigned_champion_id "AssignedChampionId"
             from lobby_players p
             join users u on u.id = p.user_id
@@ -80,6 +82,12 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
             order by p.assigned_team nulls last, u.discord_username
             """,
             new { lobbyId });
+    }
+
+    public async Task<bool> DeleteAsync(Guid lobbyId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteAsync("delete from lobbies where id = @lobbyId", new { lobbyId }) > 0;
     }
 
     public async Task<IEnumerable<Lobby>> GetForClubAsync(Guid clubId, int limit = 20)

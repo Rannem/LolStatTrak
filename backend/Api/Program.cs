@@ -68,9 +68,17 @@ builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<ClubRepository>();
 builder.Services.AddScoped<LobbyRepository>();
 builder.Services.AddScoped<MatchRepository>();
+builder.Services.AddScoped<AuditRepository>();
 builder.Services.AddScoped<RandomizerService>();
 builder.Services.AddScoped<LobbyMatchCorrelationService>();
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<ClubAccess>();
+
+// Comma-separated Discord user ids that get site-wide admin rights (and are auto-approved).
+builder.Services.AddSingleton(new GlobalAdminOptions(
+    (builder.Configuration["GLOBAL_ADMIN_DISCORD_IDS"] ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToHashSet()));
 builder.Services.AddHttpClient<RiotApiClient>();
 builder.Services.AddHttpClient(nameof(ChampionCatalogService));
 // Singleton so the Data Dragon champion cache is shared across all requests.
@@ -154,7 +162,11 @@ builder.Services.AddAuthentication(options =>
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AppPolicies.Approved, policy => policy.RequireAssertion(ctx => ctx.User.IsApproved()));
+    options.AddPolicy(AppPolicies.GlobalAdmin, policy => policy.RequireClaim(AppClaims.GlobalAdmin, "true"));
+});
 
 var app = builder.Build();
 
@@ -205,4 +217,10 @@ static string? ResolvePostgresConnectionString(IConfiguration configuration)
         SslMode = Npgsql.SslMode.Prefer,
     };
     return builder.ConnectionString;
+}
+
+/// <summary>Discord ids granted site-wide admin rights via GLOBAL_ADMIN_DISCORD_IDS.</summary>
+public record GlobalAdminOptions(IReadOnlySet<string> DiscordIds)
+{
+    public bool Contains(string discordId) => DiscordIds.Contains(discordId);
 }

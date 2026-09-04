@@ -16,6 +16,23 @@ export class AuthService {
   readonly user = computed(() => this._user() ?? null);
   readonly isAuthenticated = computed(() => !!this._user());
   readonly checked = computed(() => this._user() !== undefined);
+  readonly isApproved = computed(() => {
+    const u = this._user();
+    return !!u && (u.isGlobalAdmin || u.accessStatus === 'Approved');
+  });
+  readonly isGlobalAdmin = computed(() => !!this._user()?.isGlobalAdmin);
+
+  linkRiotAccount(gameName: string, tagLine: string) {
+    return this.http
+      .put<User>(`${environment.apiBaseUrl}/auth/riot-account`, { gameName, tagLine }, { withCredentials: true })
+      .pipe(tap((user) => this._user.set(user)));
+  }
+
+  unlinkRiotAccount() {
+    return this.http
+      .delete<User>(`${environment.apiBaseUrl}/auth/riot-account`, { withCredentials: true })
+      .pipe(tap((user) => this._user.set(user)));
+  }
 
   loginWithDiscord(): void {
     // Always land on /clubs after a successful login, regardless of which page the

@@ -11,9 +11,18 @@ public class ClubMemberView
     public Guid UserId { get; set; }
     public string DiscordUsername { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? RiotGameName { get; set; }
+    public string? RiotTagLine { get; set; }
     public ClubMemberRole Role { get; set; }
     public ClubMembershipStatus Status { get; set; }
     public DateTimeOffset JoinedAt { get; set; }
+}
+
+public class ClubOverview : Club
+{
+    public string OwnerUsername { get; set; } = string.Empty;
+    public int MemberCount { get; set; }
+    public int MatchCount { get; set; }
 }
 
 public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
@@ -99,7 +108,7 @@ public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QueryAsync<ClubMemberView>(
             """
             select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
-                   u.avatar_url "AvatarUrl", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+                   u.avatar_url "AvatarUrl", u.riot_game_name "RiotGameName", u.riot_tag_line "RiotTagLine", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
             from club_members m
             join users u on u.id = m.user_id
             where m.club_id = @clubId and m.status = @pending
@@ -114,7 +123,7 @@ public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QueryAsync<ClubMemberView>(
             """
             select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
-                   u.avatar_url "AvatarUrl", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+                   u.avatar_url "AvatarUrl", u.riot_game_name "RiotGameName", u.riot_tag_line "RiotTagLine", m.role "Role", m.status "Status", m.joined_at "JoinedAt"
             from club_members m
             join users u on u.id = m.user_id
             where m.club_id = @clubId and m.status = @approved
@@ -133,6 +142,44 @@ public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
             from clubs where id = @clubId
             """,
             new { clubId });
+    }
+
+    public async Task<IEnumerable<ClubOverview>> GetAllAsync()
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QueryAsync<ClubOverview>(
+            """
+            select c.id "Id", c.name "Name", c.slug "Slug", c.owner_user_id "OwnerUserId",
+                   u.discord_username "OwnerUsername", c.invite_code "InviteCode", c.created_at "CreatedAt",
+                   (select count(*) from club_members m where m.club_id = c.id and m.status = @approved) "MemberCount",
+                   (select count(*) from matches x where x.club_id = c.id) "MatchCount"
+            from clubs c
+            join users u on u.id = c.owner_user_id
+            order by c.created_at desc
+            """,
+            new { approved = (int)ClubMembershipStatus.Approved });
+    }
+
+    public async Task<bool> DeleteAsync(Guid clubId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteAsync("delete from clubs where id = @clubId", new { clubId }) > 0;
+    }
+
+    public async Task<bool> SetMemberRoleAsync(Guid clubId, Guid userId, ClubMemberRole role)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteAsync(
+            "update club_members set role = @role where club_id = @clubId and user_id = @userId and role <> @owner",
+            new { clubId, userId, role = (int)role, owner = (int)ClubMemberRole.Owner }) > 0;
+    }
+
+    public async Task<bool> RemoveMemberAsync(Guid clubId, Guid userId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteAsync(
+            "delete from club_members where club_id = @clubId and user_id = @userId and role <> @owner",
+            new { clubId, userId, owner = (int)ClubMemberRole.Owner }) > 0;
     }
 
     public async Task ApproveMemberAsync(Guid clubId, Guid userId)

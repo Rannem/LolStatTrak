@@ -7,6 +7,10 @@
 
     <nav class="nav">
       <a routerLink="/clubs">Clubs</a>
+      <a routerLink="/profile">Profile</a>
+      @if (auth.isGlobalAdmin()) {
+        <a routerLink="/admin" class="admin">Admin</a>
+      }
     </nav>
 
     <div class="user">

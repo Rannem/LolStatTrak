@@ -65,6 +65,8 @@ A Production key is only relevant if the app is ever opened to the public.
    | `DISCORD_CLIENT_SECRET` | from the Discord Developer Portal |
    | `RIOT_API_KEY` | your Riot **Personal** API key |
    | `CORS_ALLOWED_ORIGINS` | reference → `${{frontend.RAILWAY_PUBLIC_DOMAIN}}` (prefixed with `https://`) |
+   | `GLOBAL_ADMIN_DISCORD_IDS` | comma-separated Discord user IDs that get **global admin** (see below) |
+   | `RIOT_REGION` | optional, regional routing for account lookups (default `europe`; `americas`/`asia`/`sea`) |
 
 3. **Create the `frontend` service** from `deploy/Dockerfile.frontend`. Set:
 
@@ -80,4 +82,37 @@ A Production key is only relevant if the app is ever opened to the public.
 
 That's it — no manual connection strings, and the two Railway variable references above
 mean the frontend/backend/CORS URLs stay correct automatically if a domain ever changes.
+
+## Access control & roles
+
+**Sign-up approval.** Anyone can log in with Discord, but new accounts start as
+`Pending` and only see a "waiting for approval" screen. A global admin approves or
+rejects them at `/admin`. Approval takes effect on the user's next page load (no
+re-login needed). Existing users at the time of the migration are auto-approved.
+
+**Global admins** are configured via `GLOBAL_ADMIN_DISCORD_IDS` (Discord → User Settings →
+Advanced → enable Developer Mode → right-click your name → *Copy User ID*). The flag is
+re-synced on every login, so adding/removing IDs and redeploying is all that's needed.
+Global admins are auto-approved, bypass all club-level permission checks, and get the
+`/admin` page: pending sign-ups, all users, all clubs (with delete), and the global audit log.
+
+**Club roles** (per club):
+
+| Action | Member | Mod | Admin | Owner |
+|---|---|---|---|---|
+| Join lobbies, roll, view stats | ✓ | ✓ | ✓ | ✓ |
+| Approve join requests, manage bans | | ✓ | ✓ | ✓ |
+| Delete lobbies & recorded matches | | | ✓ | ✓ |
+| Kick members, promote/demote Member↔Mod | | | ✓ | ✓ |
+| Promote to Admin, view audit log | | | ✓* | ✓ |
+| Delete the club | | | | ✓ |
+
+\* Admins can view the audit log; only the owner can grant the Admin role.
+
+Every moderation action (approvals, kicks, role changes, ban edits, lobby/match deletions,
+club deletion) is written to `audit_log` and visible in the club's **Audit** tab.
+
+**Riot account linking** is done by each user at `/profile` (enter `GameName#TAG`); it's
+resolved to a PUUID via account-v1 and required for that player's match stats to be
+tracked. Players without a linked account show a red `no riot id` badge in lobbies.
 

@@ -1,10 +1,11 @@
+using LolStatTrak.Api.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace LolStatTrak.Api.Hubs;
 
 /// <summary>Broadcasts live lobby presence and randomizer results to connected club members.</summary>
-[Authorize]
+[Authorize(Policy = AppPolicies.Approved)]
 public class LobbyHub : Hub
 {
     public async Task JoinLobbyGroup(string lobbyId)

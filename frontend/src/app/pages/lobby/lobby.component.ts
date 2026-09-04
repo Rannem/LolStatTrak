@@ -92,7 +92,7 @@ import { LobbyService } from '../../core/services/lobby.service';
 
     <ng-template #playerCard let-p>
       @let champ = champions.get(p.assignedChampionId);
-      <div class="player-card" [style.background-image]="champ ? 'url(' + champ.loadingArtUrl + ')' : ''">
+      <div class="player-card" [style.background-image]="champ ? 'url(' + champ.splashUrl + ')' : ''">
         <div class="player-card-shade"></div>
         <div class="player-card-body">
           <div class="who">
@@ -100,6 +100,9 @@ import { LobbyService } from '../../core/services/lobby.service';
             <span class="pname">{{ p.discordUsername }}</span>
             @if (p.userId === auth.user()?.id) {
               <span class="badge blue">you</span>
+            }
+            @if (!p.riotGameName) {
+              <a routerLink="/profile" class="badge unlinked" title="No Riot account linked — stats won't be tracked">no riot id</a>
             }
           </div>
           <div class="champ">
@@ -231,13 +234,13 @@ import { LobbyService } from '../../core/services/lobby.service';
 
     .player-card {
       position: relative;
-      min-height: 120px;
+      min-height: 150px;
       border-radius: var(--radius);
       overflow: hidden;
       border: 1px solid var(--gold-4);
       background-color: var(--bg-3);
       background-size: cover;
-      background-position: center 20%;
+      background-position: right 25%;
       transition: transform 0.15s, box-shadow 0.15s;
 
       &:hover {
@@ -249,7 +252,7 @@ import { LobbyService } from '../../core/services/lobby.service';
     .player-card-shade {
       position: absolute;
       inset: 0;
-      background: linear-gradient(90deg, rgba(1, 10, 19, 0.95) 0%, rgba(1, 10, 19, 0.75) 55%, rgba(1, 10, 19, 0.15) 100%);
+      background: linear-gradient(90deg, rgba(1, 10, 19, 0.95) 0%, rgba(1, 10, 19, 0.7) 45%, rgba(1, 10, 19, 0.05) 100%);
     }
 
     .player-card-body {
@@ -271,6 +274,12 @@ import { LobbyService } from '../../core/services/lobby.service';
     .pname {
       font-weight: 600;
       color: var(--text);
+    }
+
+    .unlinked {
+      color: var(--danger);
+      border-color: rgba(232, 64, 87, 0.5);
+      font-size: 0.6rem;
     }
 
     .champ {

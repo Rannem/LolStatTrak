@@ -19,7 +19,10 @@ public class JwtTokenService(IOptions<JwtOptions> options)
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new("discord_id", user.DiscordId),
             new(ClaimTypes.Name, user.DiscordUsername),
+            new(AppClaims.AccessStatus, user.AccessStatus.ToString()),
         };
+        if (user.IsGlobalAdmin)
+            claims.Add(new Claim(AppClaims.GlobalAdmin, "true"));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
