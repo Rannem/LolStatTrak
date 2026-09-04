@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +35,17 @@ builder.Services.Configure<RiotApiOptions>(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
+
+// Trust X-Forwarded-Proto/-For/-Host from Caddy so the app correctly sees "https" and the
+// original client info, even though the backend itself only ever receives plain HTTP on
+// Railway's private network. KnownNetworks/KnownProxies are cleared because the private
+// network's IP isn't fixed/known in advance.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Comma-separated list, e.g. "https://lolstattrak.up.railway.app" — the one public frontend URL.
 var allowedOrigins = (builder.Configuration["CORS_ALLOWED_ORIGINS"] ?? builder.Configuration["Cors:AllowedOrigins:0"] ?? "")
@@ -147,7 +159,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// No UseHttpsRedirection(): the backend is only ever reached over plain HTTP on Railway's
+// private network (TLS is terminated at the Caddy/frontend edge), so redirecting to https
+// here would send the browser to an unreachable *.railway.internal address.
+app.UseForwardedHeaders();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
