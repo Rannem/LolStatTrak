@@ -7,11 +7,12 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
 import { LobbyHubService } from '../../core/services/lobby-hub.service';
 import { LobbyService } from '../../core/services/lobby.service';
+import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 
 @Component({
   selector: 'app-lobby',
   standalone: true,
-  imports: [RouterLink, NgTemplateOutlet],
+  imports: [RouterLink, NgTemplateOutlet, AvatarPipe],
   template: `
     <div class="page fade-up">
       @if (lobby(); as lobby) {
@@ -35,7 +36,7 @@ import { LobbyService } from '../../core/services/lobby.service';
           }
           @if (!isPlayed()) {
             <button class="btn-primary" (click)="roll()" [disabled]="busy() || players().length === 0">
-              🎲 {{ isRolled() ? 'Re-roll' : (assignChampions() ? 'Roll teams & champions' : 'Roll teams') }}
+              {{ rolling() ? '⏳' : '🎲' }} {{ isRolled() ? 'Re-roll' : (assignChampions() ? 'Roll teams & champions' : 'Roll teams') }}
             </button>
           }
           @if (isRolled() && !isPlayed()) {
@@ -85,7 +86,7 @@ import { LobbyService } from '../../core/services/lobby.service';
             <ul class="clean waiting">
               @for (p of players(); track p.userId) {
                 <li>
-                  <img class="avatar" [src]="p.avatarUrl || fallbackAvatar" [alt]="p.discordUsername" />
+                  <img class="avatar" [src]="p.avatarUrl | avatar: 64" [alt]="p.discordUsername" />
                   <span>{{ p.discordUsername }}</span>
                   @if (p.userId === auth.user()?.id) {
                     <span class="badge blue">you</span>
@@ -104,7 +105,7 @@ import { LobbyService } from '../../core/services/lobby.service';
         <div class="player-card-shade"></div>
         <div class="player-card-body">
           <div class="who">
-            <img class="avatar avatar-sm" [src]="p.avatarUrl || fallbackAvatar" [alt]="p.discordUsername" />
+            <img class="avatar avatar-sm" [src]="p.avatarUrl | avatar: 32" [alt]="p.discordUsername" />
             <span class="pname">{{ p.discordUsername }}</span>
             @if (p.userId === auth.user()?.id) {
               <span class="badge blue">you</span>
@@ -115,7 +116,7 @@ import { LobbyService } from '../../core/services/lobby.service';
           </div>
           @if (champ) {
             <div class="champ">
-              <img class="champ-icon" [src]="champ.iconUrl" [alt]="champ.name" />
+              <img class="champ-icon" [src]="champ.iconUrl" [alt]="champ.name" decoding="async" fetchpriority="high" />
               <div>
                 <div class="champ-name">{{ champ.name }}</div>
                 <div class="champ-title">{{ champ.title }}</div>
@@ -351,11 +352,10 @@ export class LobbyComponent implements OnInit, OnDestroy {
   protected readonly players = signal<LobbyPlayer[]>([]);
   protected readonly connected = signal(false);
   protected readonly busy = signal(false);
+  protected readonly rolling = signal(false);
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly matchFound = signal(false);
-
-  protected readonly fallbackAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
   protected readonly modeLabel = gameModeLabel;
 
   protected readonly isRolled = computed(() => this.players().some((p) => p.assignedTeam != null));
@@ -371,16 +371,16 @@ export class LobbyComponent implements OnInit, OnDestroy {
 
     this.lobbyService.get(this.lobbyId).subscribe((state) => {
       this.lobby.set(state.lobby);
-      this.players.set(state.players);
+      this.setPlayers(state.players);
       this.matchFound.set(!!state.matchId);
     });
 
     this.subs.add(this.hub.lobbyRolled$.subscribe((players) => {
-      this.players.set(players);
+      this.setPlayers(players);
       this.lobby.update((l) => (l ? { ...l, status: 'Rolled' } : l));
     }));
     this.subs.add(this.hub.playerJoined$.subscribe((evt) => {
-      if (evt.lobbyId === this.lobbyId) this.players.set(evt.players);
+      if (evt.lobbyId === this.lobbyId) this.setPlayers(evt.players);
     }));
     this.subs.add(this.hub.lobbyPlayed$.subscribe((evt) => {
       if (evt.lobbyId === this.lobbyId) this.applyCorrelation(evt.result);
@@ -404,14 +404,33 @@ export class LobbyComponent implements OnInit, OnDestroy {
   }
 
   join(): void {
-    this.run(this.lobbyService.join(this.lobbyId), (players) => this.players.set(players));
+    // Optimistic: show myself in the list immediately; the server response / hub event reconciles.
+    const me = this.auth.user();
+    const before = this.players();
+    if (me && !this.amIn()) {
+      this.players.update((ps) => [
+        ...ps,
+        { lobbyId: this.lobbyId, userId: me.id, discordUsername: me.discordUsername, avatarUrl: me.avatarUrl, assignedTeam: null, assignedChampionId: null },
+      ]);
+    }
+    this.run(
+      this.lobbyService.join(this.lobbyId),
+      (players) => this.setPlayers(players),
+      () => this.players.set(before),
+    );
   }
 
   roll(): void {
-    this.run(this.lobbyService.roll(this.lobbyId), (players) => {
-      this.players.set(players);
-      this.lobby.update((l) => (l ? { ...l, status: 'Rolled' } : l));
-    });
+    this.rolling.set(true);
+    this.run(
+      this.lobbyService.roll(this.lobbyId),
+      (players) => {
+        this.setPlayers(players);
+        this.lobby.update((l) => (l ? { ...l, status: 'Rolled' } : l));
+        this.rolling.set(false);
+      },
+      () => this.rolling.set(false),
+    );
   }
 
   markPlayed(): void {
@@ -445,7 +464,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
     }
   }
 
-  private run<T>(obs: Observable<T>, onNext: (v: T) => void): void {
+  private run<T>(obs: Observable<T>, onNext: (v: T) => void, onError?: () => void): void {
     this.busy.set(true);
     this.error.set('');
     obs.subscribe({
@@ -454,10 +473,32 @@ export class LobbyComponent implements OnInit, OnDestroy {
         this.busy.set(false);
       },
       error: (e: unknown) => {
+        onError?.();
         const msg = (e as { error?: { title?: string; detail?: string } })?.error;
         this.error.set(msg?.detail ?? msg?.title ?? 'Something went wrong. Try again.');
         this.busy.set(false);
       },
     });
+  }
+
+  /** Sets players and warms the browser cache with their splash art so rolled cards appear together. */
+  private setPlayers(players: LobbyPlayer[]): void {
+    this.players.set(players);
+    this.preloadSplashes(players);
+  }
+
+  private readonly preloaded = new Set<string>();
+
+  private preloadSplashes(players: LobbyPlayer[]): void {
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (conn?.saveData) return;
+    for (const p of players) {
+      const url = this.champions.get(p.assignedChampionId)?.splashUrl;
+      if (!url || this.preloaded.has(url)) continue;
+      this.preloaded.add(url);
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
   }
 }

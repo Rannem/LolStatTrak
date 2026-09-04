@@ -1,15 +1,17 @@
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 
 @Component({
   selector: 'app-pending',
   standalone: true,
+  imports: [AvatarPipe],
   template: `
     <div class="wrap">
       <div class="card box fade-up">
         @if (auth.user(); as user) {
-          <img class="avatar big" [src]="user.avatarUrl || fallback" [alt]="user.discordUsername" />
+          <img class="avatar big" [src]="user.avatarUrl | avatar: 128" [alt]="user.discordUsername" />
           <h1>Hey, {{ user.discordUsername }}</h1>
 
           @if (user.accessStatus === 'Rejected') {
@@ -67,7 +69,6 @@ import { AuthService } from '../../core/services/auth.service';
 export class PendingComponent {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
-  protected readonly fallback = 'https://cdn.discordapp.com/embed/avatars/0.png';
   protected checking = false;
 
   recheck(): void {

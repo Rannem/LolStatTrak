@@ -1,11 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
+import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, AvatarPipe],
   template: `
     <div class="page fade-up narrow">
       <div class="page-header">
@@ -17,7 +18,7 @@ import { AuthService } from '../../core/services/auth.service';
 
       @if (auth.user(); as user) {
         <div class="card identity">
-          <img class="avatar big" [src]="user.avatarUrl || fallback" [alt]="user.discordUsername" />
+          <img class="avatar big" [src]="user.avatarUrl | avatar: 128" [alt]="user.discordUsername" />
           <div>
             <div class="name">{{ user.discordUsername }}</div>
             <div class="row small">
@@ -115,7 +116,6 @@ import { AuthService } from '../../core/services/auth.service';
 })
 export class ProfileComponent {
   protected readonly auth = inject(AuthService);
-  protected readonly fallback = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   protected gameName = '';
   protected tagLine = '';

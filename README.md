@@ -83,6 +83,21 @@ A Production key is only relevant if the app is ever opened to the public.
 That's it — no manual connection strings, and the two Railway variable references above
 mean the frontend/backend/CORS URLs stay correct automatically if a domain ever changes.
 
+### Performance notes
+
+- The frontend ships a **service worker** (`frontend/ngsw-config.json`) that caches the
+  app shell, Data Dragon champion art and Discord avatars. After a deploy, users already
+  on the site keep the previous build until they accept the "new version ready → Reload"
+  toast (or reopen the tab). Caddy serves `index.html`, `ngsw.json` and `ngsw-worker.js`
+  with `no-cache`; every hashed asset is `immutable` for a year.
+- SignalR goes straight to WebSockets (`skipNegotiation`) and falls back to a negotiated
+  connection only if the socket can't be opened. If DevTools shows repeated `POST
+  /hubs/lobby?id=…` requests, something in front of Caddy is stripping the `Upgrade`
+  header.
+- The club page loads from a single `GET /api/clubs/{id}/overview` call and is prefetched
+  when you hover a club card; `/auth/me` is cached client-side for 60 s so route changes
+  don't wait on the network.
+
 ## Access control & roles
 
 **Sign-up approval.** Anyone can log in with Discord, but new accounts start as

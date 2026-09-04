@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { AdminUser, AuditEntry, ClubOverview } from '../../core/models/models';
 import { AdminService } from '../../core/services/admin.service';
 import { AuthService } from '../../core/services/auth.service';
+import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 import { AuditLogComponent } from '../../shared/audit-log/audit-log.component';
 
 type Tab = 'pending' | 'users' | 'clubs' | 'audit';
@@ -11,7 +12,7 @@ type Tab = 'pending' | 'users' | 'clubs' | 'audit';
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [DatePipe, RouterLink, AuditLogComponent],
+  imports: [DatePipe, RouterLink, AuditLogComponent, AvatarPipe],
   template: `
     <div class="page fade-up">
       <div class="page-header">
@@ -48,7 +49,7 @@ type Tab = 'pending' | 'users' | 'clubs' | 'audit';
               <ul class="clean list">
                 @for (u of pending(); track u.id) {
                   <li>
-                    <img class="avatar" [src]="u.avatarUrl || fallback" [alt]="u.discordUsername" />
+                    <img class="avatar" [src]="u.avatarUrl | avatar: 64" [alt]="u.discordUsername" />
                     <div class="grow">
                       <div>{{ u.discordUsername }}</div>
                       <div class="dim small">registered {{ u.createdAt | date: 'MMM d, HH:mm' }}</div>
@@ -68,7 +69,7 @@ type Tab = 'pending' | 'users' | 'clubs' | 'audit';
             <ul class="clean list">
               @for (u of users(); track u.id) {
                 <li>
-                  <img class="avatar avatar-sm" [src]="u.avatarUrl || fallback" [alt]="u.discordUsername" />
+                  <img class="avatar avatar-sm" [src]="u.avatarUrl | avatar: 32" [alt]="u.discordUsername" />
                   <div class="grow">
                     <span>{{ u.discordUsername }}</span>
                     @if (u.riotGameName) {
@@ -179,7 +180,6 @@ type Tab = 'pending' | 'users' | 'clubs' | 'audit';
 export class AdminComponent implements OnInit {
   private readonly admin = inject(AdminService);
   protected readonly auth = inject(AuthService);
-  protected readonly fallback = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   protected readonly tab = signal<Tab>('pending');
   protected readonly pending = signal<AdminUser[]>([]);

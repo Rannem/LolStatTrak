@@ -91,3 +91,20 @@
   font-weight: 700;
   font-size: 0.8rem;
 }
+
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--gold-4);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), var(--glow-gold);
+  font-size: 0.9rem;
+  z-index: 100;
+}

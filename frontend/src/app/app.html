@@ -16,7 +16,7 @@
     <div class="user">
       @if (auth.user(); as user) {
         @if (user.avatarUrl) {
-          <img class="avatar avatar-sm" [src]="user.avatarUrl" [alt]="user.discordUsername" />
+          <img class="avatar avatar-sm" [src]="user.avatarUrl | avatar: 32" [alt]="user.discordUsername" />
         } @else {
           <span class="avatar avatar-sm avatar-fallback">{{ user.discordUsername.charAt(0).toUpperCase() }}</span>
         }
@@ -30,3 +30,10 @@
 <main>
   <router-outlet />
 </main>
+
+@if (updateAvailable()) {
+  <div class="update-toast" role="status">
+    <span>A new version of LolStatTrak is ready.</span>
+    <button class="btn-primary btn-sm" (click)="reload()">Reload</button>
+  </div>
+}

@@ -1,7 +1,13 @@
 /* ---------------------------------------------------------------------------
    LolStatTrak global theme — dark hextech-inspired palette
    --------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+/* Self-hosted fonts (latin subset only, weights actually used) — no third-party origins on the critical path. */
+@use '@fontsource/cinzel/latin-600.css' as cinzel600;
+@use '@fontsource/cinzel/latin-700.css' as cinzel700;
+@use '@fontsource/inter/latin-400.css' as inter400;
+@use '@fontsource/inter/latin-500.css' as inter500;
+@use '@fontsource/inter/latin-600.css' as inter600;
+@use '@fontsource/inter/latin-700.css' as inter700;
 
 :root {
   --bg-0: #010a13;

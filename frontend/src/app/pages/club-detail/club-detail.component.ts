@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuditEntry, ClubDetail, ClubMember, ClubOverviewPage, ClubRole, GAME_MODES, Lobby, LobbyGameMode, MatchSummary, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
+import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 import { ChampionService } from '../../core/services/champion.service';
 import { ClubService } from '../../core/services/club.service';
 import { LobbyHubService } from '../../core/services/lobby-hub.service';
@@ -16,7 +17,7 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
 @Component({
   selector: 'app-club-detail',
   standalone: true,
-  imports: [RouterLink, DatePipe, ChampionPickerComponent, AuditLogComponent],
+  imports: [RouterLink, DatePipe, ChampionPickerComponent, AuditLogComponent, AvatarPipe],
   template: `
     <div class="page fade-up">
       <a routerLink="/clubs" class="back">‹ All clubs</a>
@@ -186,7 +187,7 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
                 <ul class="clean rows">
                   @for (member of members(); track member.userId) {
                     <li class="member">
-                      <img class="avatar avatar-sm" [src]="member.avatarUrl || fallbackAvatar" [alt]="member.discordUsername" />
+                      <img class="avatar avatar-sm" [src]="member.avatarUrl | avatar: 32" [alt]="member.discordUsername" />
                       <div class="grow">
                         <div>{{ member.discordUsername }}</div>
                         @if (member.riotGameName) {
@@ -231,7 +232,7 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
                       <ul class="clean rows">
                         @for (request of pendingRequests(); track request.userId) {
                           <li class="member">
-                            <img class="avatar avatar-sm" [src]="request.avatarUrl || fallbackAvatar" [alt]="request.discordUsername" />
+                            <img class="avatar avatar-sm" [src]="request.avatarUrl | avatar: 32" [alt]="request.discordUsername" />
                             <span class="grow">{{ request.discordUsername }}</span>
                             <button class="btn-accent btn-sm" (click)="approve(request.userId)">Approve</button>
                           </li>
@@ -559,8 +560,6 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     () => GAME_MODES.find((m) => m.value === this.newMode())?.canAssignChampions ?? true,
   );
   protected readonly modeLabel = gameModeLabel;
-
-  protected readonly fallbackAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   protected pickMode(mode: LobbyGameMode): void {
     this.newMode.set(mode);
