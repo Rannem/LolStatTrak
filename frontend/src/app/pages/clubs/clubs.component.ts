@@ -19,7 +19,7 @@ import { ClubService } from '../../core/services/club.service';
 
       <div class="grid clubs-grid">
         @for (club of clubs(); track club.id) {
-          <a class="card card-link club-card" [routerLink]="['/clubs', club.id]">
+          <a class="card card-link club-card" [routerLink]="['/clubs', club.id]" (mouseenter)="prefetch(club.id)" (focus)="prefetch(club.id)">
             <div class="club-icon">{{ club.name.charAt(0).toUpperCase() }}</div>
             <div class="club-body">
               <h3>{{ club.name }}</h3>
@@ -131,6 +131,10 @@ export class ClubsComponent implements OnInit {
 
   private reload(): void {
     this.clubService.getMyClubs().subscribe((clubs) => this.clubs.set(clubs));
+  }
+
+  prefetch(clubId: string): void {
+    this.clubService.prefetchOverview(clubId);
   }
 
   createClub(): void {

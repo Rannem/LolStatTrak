@@ -50,8 +50,18 @@ export class LobbyHubService {
     if (this.connection?.state === signalR.HubConnectionState.Connected) return Promise.resolve();
     if (this.starting) return this.starting;
 
+    // Fast path: straight to WebSockets, skipping the /negotiate round-trip. If the socket
+    // can't be established (odd proxy, corporate network) rebuild with full negotiation so
+    // SignalR can fall back to SSE/long polling instead of staying dead.
+    this.starting = this.start({ transport: signalR.HttpTransportType.WebSockets, skipNegotiation: true })
+      .catch(() => this.start({}))
+      .finally(() => (this.starting = undefined));
+    return this.starting;
+  }
+
+  private start(options: signalR.IHttpConnectionOptions): Promise<void> {
     this.connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${environment.hubBaseUrl}/lobby`, { withCredentials: true })
+      .withUrl(`${environment.hubBaseUrl}/lobby`, { withCredentials: true, ...options })
       .withAutomaticReconnect()
       .build();
 
@@ -61,7 +71,6 @@ export class LobbyHubService {
     this.connection.on('ClubLobbyUpserted', (payload) => this.clubLobbyUpserted$.next(payload));
     this.connection.on('ClubLobbyDeleted', (payload) => this.clubLobbyDeleted$.next(payload));
 
-    this.starting = this.connection.start().finally(() => (this.starting = undefined));
-    return this.starting;
+    return this.connection.start();
   }
 }

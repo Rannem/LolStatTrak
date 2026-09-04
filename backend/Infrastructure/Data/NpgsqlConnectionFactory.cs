@@ -2,13 +2,27 @@ using Npgsql;
 
 namespace LolStatTrak.Infrastructure.Data;
 
-/// <summary>Creates open Npgsql connections from the configured connection string.</summary>
-public class NpgsqlConnectionFactory(string connectionString)
+/// <summary>
+/// Hands out open connections from a single <see cref="NpgsqlDataSource"/>: one parsed
+/// connection string, one pool, and automatic server-side preparation of hot statements.
+/// </summary>
+public sealed class NpgsqlConnectionFactory : IAsyncDisposable
 {
-    public async Task<NpgsqlConnection> CreateOpenConnectionAsync(CancellationToken ct = default)
+    private readonly NpgsqlDataSource _dataSource;
+
+    public NpgsqlConnectionFactory(string connectionString)
     {
-        var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync(ct);
-        return connection;
+        var csb = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            // Dapper re-sends the same SQL text constantly; let Npgsql prepare the top N automatically.
+            MaxAutoPrepare = 32,
+            AutoPrepareMinUsages = 2,
+        };
+        _dataSource = new NpgsqlDataSourceBuilder(csb.ConnectionString).Build();
     }
+
+    public async Task<NpgsqlConnection> CreateOpenConnectionAsync(CancellationToken ct = default)
+        => await _dataSource.OpenConnectionAsync(ct);
+
+    public ValueTask DisposeAsync() => _dataSource.DisposeAsync();
 }

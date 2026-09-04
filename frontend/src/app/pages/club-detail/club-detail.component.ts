@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { AuditEntry, ClubDetail, ClubMember, ClubRole, GAME_MODES, Lobby, LobbyGameMode, MatchSummary, gameModeLabel } from '../../core/models/models';
+import { AuditEntry, ClubDetail, ClubMember, ClubOverviewPage, ClubRole, GAME_MODES, Lobby, LobbyGameMode, MatchSummary, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
 import { ClubService } from '../../core/services/club.service';
@@ -92,6 +92,9 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
                         <a [routerLink]="['/lobbies', lobby.id]" class="lobby-row">
                           <span class="badge" [class.blue]="lobby.status === 'Open'" [class.gold]="lobby.status === 'Rolled'">{{ lobby.status }}</span>
                           <span class="mode-tag">{{ modeLabel(lobby.gameMode) }}{{ lobby.assignChampions ? '' : ' · teams only' }}</span>
+                          @if (lobby.playerCount != null) {
+                            <span class="muted">👥 {{ lobby.playerCount }}</span>
+                          }
                           <span class="muted">{{ lobby.createdAt | date: 'MMM d, HH:mm' }}</span>
                           <span class="chev">›</span>
                         </a>
@@ -575,17 +578,13 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     this.clubId = this.route.snapshot.paramMap.get('clubId') ?? '';
     this.champions.ensureLoaded();
 
-    this.clubService.getClub(this.clubId).subscribe({
-      next: (club) => {
-        this.club.set(club);
-        if (club.canManage) this.reloadJoinRequests();
-      },
+    // Paint instantly from a hover-prefetch / recent visit, then revalidate.
+    const cached = this.clubService.peekOverview(this.clubId);
+    if (cached) this.applyOverview(cached);
+    this.clubService.getOverview(this.clubId).subscribe({
+      next: (data) => this.applyOverview(data),
       error: () => this.router.navigateByUrl('/clubs'),
     });
-    this.reloadMembers();
-    this.reloadLobbies();
-    this.clubService.getMatches(this.clubId).subscribe((m) => this.matches.set(m));
-    this.clubService.getBannedChampions(this.clubId).subscribe((ids) => this.bans.set(ids));
 
     this.subs.add(this.hub.clubLobbyUpserted$.subscribe((lobby) => {
       if (lobby.clubId !== this.clubId) return;
@@ -609,6 +608,15 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subs.unsubscribe();
     this.hub.leaveClub(this.clubId).catch(() => undefined);
+  }
+
+  private applyOverview(data: ClubOverviewPage): void {
+    this.club.set(data.club);
+    this.members.set(data.members);
+    this.pendingRequests.set(data.pendingRequests);
+    this.lobbies.set(data.lobbies);
+    this.matches.set(data.matches);
+    if (!this.bansDirty()) this.bans.set(data.bannedChampionIds);
   }
 
   private reloadJoinRequests(): void {

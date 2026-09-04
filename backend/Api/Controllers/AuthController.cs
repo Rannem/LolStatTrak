@@ -73,7 +73,8 @@ public class AuthController(
     /// <summary>
     /// Returns the signed-in user's profile (including approval status so the SPA can show
     /// the "waiting for approval" screen); 401 if the session cookie is missing/expired.
-    /// Also refreshes the JWT so an approval granted since login takes effect without re-auth.
+    /// Re-issues the JWT only when the authorization claims actually changed (e.g. an approval
+    /// granted since login), so the common case is a plain read with no Set-Cookie.
     /// </summary>
     [HttpGet("me")]
     [Authorize]
@@ -86,7 +87,13 @@ public class AuthController(
             return Unauthorized();
         }
 
-        IssueSessionCookie(user);
+        var tokenSaysApproved = User.IsApproved();
+        var tokenSaysGlobalAdmin = User.IsGlobalAdmin();
+        var isApprovedNow = user.IsGlobalAdmin || user.AccessStatus == UserAccessStatus.Approved;
+        if (tokenSaysApproved != isApprovedNow || tokenSaysGlobalAdmin != user.IsGlobalAdmin)
+            IssueSessionCookie(user);
+
+        Response.Headers.CacheControl = "no-store";
         return Ok(ToProfile(user));
     }
 

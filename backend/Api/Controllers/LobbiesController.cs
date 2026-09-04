@@ -73,6 +73,7 @@ public class LobbiesController(
         var players = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
             .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId = CurrentUserId, players });
+        await BroadcastLobbyChanged(lobbyId);
         return Ok(players);
     }
 
@@ -161,7 +162,7 @@ public class LobbiesController(
     /// <summary>Pushes the lobby's current metadata to everyone watching the club page.</summary>
     private async Task BroadcastLobbyChanged(Guid lobbyId, CancellationToken ct = default)
     {
-        var lobby = await lobbyRepository.GetAsync(lobbyId);
+        var lobby = await lobbyRepository.GetListItemAsync(lobbyId);
         if (lobby is null)
             return;
         await hubContext.Clients.Group(LobbyHub.ClubGroupName(lobby.ClubId.ToString()))

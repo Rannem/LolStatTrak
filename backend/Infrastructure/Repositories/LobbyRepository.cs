@@ -96,18 +96,33 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.ExecuteAsync("delete from lobbies where id = @lobbyId", new { lobbyId }) > 0;
     }
 
-    public async Task<IEnumerable<Lobby>> GetForClubAsync(Guid clubId, int limit = 20)
+    public async Task<IEnumerable<LobbyListItem>> GetForClubAsync(Guid clubId, int limit = 20)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();
-        return await conn.QueryAsync<Lobby>(
+        return await conn.QueryAsync<LobbyListItem>(
             """
-            select id "Id", club_id "ClubId", created_by_user_id "CreatedByUserId",
-                   status "Status", game_mode "GameMode", assign_champions "AssignChampions", created_at "CreatedAt"
-            from lobbies where club_id = @clubId
-            order by created_at desc
+            select l.id "Id", l.club_id "ClubId", l.created_by_user_id "CreatedByUserId",
+                   l.status "Status", l.game_mode "GameMode", l.assign_champions "AssignChampions", l.created_at "CreatedAt",
+                   (select count(*) from lobby_players p where p.lobby_id = l.id)::int "PlayerCount"
+            from lobbies l where l.club_id = @clubId
+            order by l.created_at desc
             limit @limit
             """,
             new { clubId, limit });
+    }
+
+    /// <summary>Lobby metadata + head-count, used for club-feed broadcasts.</summary>
+    public async Task<LobbyListItem?> GetListItemAsync(Guid lobbyId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.QuerySingleOrDefaultAsync<LobbyListItem>(
+            """
+            select l.id "Id", l.club_id "ClubId", l.created_by_user_id "CreatedByUserId",
+                   l.status "Status", l.game_mode "GameMode", l.assign_champions "AssignChampions", l.created_at "CreatedAt",
+                   (select count(*) from lobby_players p where p.lobby_id = l.id)::int "PlayerCount"
+            from lobbies l where l.id = @lobbyId
+            """,
+            new { lobbyId });
     }
 
     public async Task SaveRollAsync(Guid lobbyId, IEnumerable<LobbyPlayer> players)

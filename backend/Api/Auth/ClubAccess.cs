@@ -10,6 +10,9 @@ namespace LolStatTrak.Api.Auth;
 /// </summary>
 public class ClubAccess(ClubRepository clubRepository)
 {
+    // Scoped per request: several checks in one action shouldn't hit the DB more than once.
+    private readonly Dictionary<(Guid ClubId, Guid UserId), ClubMember?> _memo = [];
+
     public async Task<bool> IsMemberAsync(ClaimsPrincipal user, Guid clubId)
         => user.IsGlobalAdmin() || await HasRoleAsync(user, clubId, ClubMemberRole.Member);
 
@@ -26,11 +29,18 @@ public class ClubAccess(ClubRepository clubRepository)
         => user.IsGlobalAdmin() || await HasRoleAsync(user, clubId, ClubMemberRole.Owner);
 
     public async Task<ClubMember?> GetMembershipAsync(ClaimsPrincipal user, Guid clubId)
-        => await clubRepository.GetMembershipAsync(clubId, user.GetUserId());
+    {
+        var key = (clubId, user.GetUserId());
+        if (_memo.TryGetValue(key, out var cached))
+            return cached;
+        var membership = await clubRepository.GetMembershipAsync(clubId, key.Item2);
+        _memo[key] = membership;
+        return membership;
+    }
 
     private async Task<bool> HasRoleAsync(ClaimsPrincipal user, Guid clubId, ClubMemberRole minimum)
     {
-        var membership = await clubRepository.GetMembershipAsync(clubId, user.GetUserId());
+        var membership = await GetMembershipAsync(user, clubId);
         return membership is { Status: ClubMembershipStatus.Approved } && membership.Role >= minimum;
     }
 }

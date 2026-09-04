@@ -11,7 +11,7 @@ export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  return auth.checkSession().pipe(
+  return auth.ensureSession().pipe(
     map(() => {
       if (!auth.isAuthenticated()) return router.createUrlTree(['/login']);
       if (!auth.isApproved()) return router.createUrlTree(['/pending']);
@@ -25,7 +25,7 @@ export const pendingGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  return auth.checkSession().pipe(
+  return auth.ensureSession().pipe(
     map(() => {
       if (!auth.isAuthenticated()) return router.createUrlTree(['/login']);
       if (auth.isApproved()) return router.createUrlTree(['/clubs']);
@@ -38,7 +38,7 @@ export const globalAdminGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  return auth.checkSession().pipe(
+  return auth.ensureSession().pipe(
     map(() => (auth.isGlobalAdmin() ? true : router.createUrlTree(['/clubs']))),
   );
 };

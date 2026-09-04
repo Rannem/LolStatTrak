@@ -111,6 +111,17 @@ export interface Lobby {
   gameMode: LobbyGameMode;
   assignChampions: boolean;
   createdAt: string;
+  /** Present on list rows / club feed broadcasts. */
+  playerCount?: number;
+}
+
+export interface ClubOverviewPage {
+  club: ClubDetail;
+  members: ClubMember[];
+  pendingRequests: ClubMember[];
+  lobbies: Lobby[];
+  matches: MatchSummary[];
+  bannedChampionIds: number[];
 }
 
 export type CorrelationOutcome = 'Found' | 'NoLinkedPlayers' | 'NotFoundYet' | 'RiotError';

@@ -74,6 +74,50 @@ public class ClubsController(
         });
     }
 
+    /// <summary>
+    /// Everything the club page renders, in one request and one DB round-trip: detail + my
+    /// permissions, members, pending requests (mods+), lobbies, matches and the ban list.
+    /// </summary>
+    [HttpGet("{clubId:guid}/overview")]
+    public async Task<IActionResult> Overview(Guid clubId)
+    {
+        if (!await access.IsMemberAsync(User, clubId))
+            return Forbid();
+
+        var membership = await access.GetMembershipAsync(User, clubId);
+        var role = membership?.Role;
+        var isGlobalAdmin = User.IsGlobalAdmin();
+        var canManage = isGlobalAdmin || role >= ClubMemberRole.Mod;
+
+        var data = await clubRepository.GetOverviewAsync(clubId, includePending: canManage);
+        if (data is null)
+            return NotFound();
+
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new
+        {
+            Club = new
+            {
+                data.Club.Id,
+                data.Club.Name,
+                data.Club.Slug,
+                data.Club.OwnerUserId,
+                data.Club.InviteCode,
+                data.Club.CreatedAt,
+                MyRole = role,
+                IsGlobalAdmin = isGlobalAdmin,
+                CanManage = canManage,
+                CanAdminister = isGlobalAdmin || role >= ClubMemberRole.Admin,
+                IsOwner = isGlobalAdmin || role == ClubMemberRole.Owner,
+            },
+            data.Members,
+            data.PendingRequests,
+            data.Lobbies,
+            data.Matches,
+            data.BannedChampionIds,
+        });
+    }
+
     /// <summary>Owner (or global admin) deletes the club and everything in it.</summary>
     [HttpDelete("{clubId:guid}")]
     public async Task<IActionResult> Delete(Guid clubId)

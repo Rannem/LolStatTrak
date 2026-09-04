@@ -19,8 +19,19 @@ export class ChampionService {
   ensureLoaded(): void {
     if (this._catalog() || this.loading) return;
     this.loading = true;
+
+    // Seed synchronously from the last known catalog so names/icons are on first paint,
+    // then revalidate (the server answers 304 via ETag when nothing changed).
+    const seed = this.readSeed();
+    if (seed) this._catalog.set(seed);
+
     this.http.get<ChampionCatalog>(`${environment.apiBaseUrl}/champions`).subscribe({
-      next: (catalog) => this._catalog.set(catalog),
+      next: (catalog) => {
+        if (catalog.version !== seed?.version) {
+          this._catalog.set(catalog);
+          this.writeSeed(catalog);
+        }
+      },
       complete: () => (this.loading = false),
       error: () => (this.loading = false),
     });
@@ -28,5 +39,26 @@ export class ChampionService {
 
   get(id: number | null | undefined): Champion | undefined {
     return id == null ? undefined : this.byId().get(id);
+  }
+
+  private static readonly SEED_KEY = 'lst.champions';
+
+  private readSeed(): ChampionCatalog | null {
+    try {
+      const raw = localStorage.getItem(ChampionService.SEED_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as ChampionCatalog;
+      return parsed?.version && Array.isArray(parsed.champions) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeSeed(catalog: ChampionCatalog): void {
+    try {
+      localStorage.setItem(ChampionService.SEED_KEY, JSON.stringify(catalog));
+    } catch {
+      // Quota / private mode — the HTTP cache still covers us.
+    }
   }
 }

@@ -25,6 +25,20 @@ public class ClubOverview : Club
     public int MatchCount { get; set; }
 }
 
+/// <summary>Lobby row for list views, with the current head-count so the UI needn't ask per lobby.</summary>
+public class LobbyListItem : Lobby
+{
+    public int PlayerCount { get; set; }
+}
+
+public record ClubPageData(
+    Club Club,
+    List<ClubMemberView> Members,
+    List<ClubMemberView> PendingRequests,
+    List<LobbyListItem> Lobbies,
+    List<MatchSummary> Matches,
+    List<int> BannedChampionIds);
+
 public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
 {
     public async Task<Club> CreateAsync(string name, string slug, Guid ownerUserId, string inviteCode)
@@ -142,6 +156,84 @@ public class ClubRepository(NpgsqlConnectionFactory connectionFactory)
             from clubs where id = @clubId
             """,
             new { clubId });
+    }
+
+    /// <summary>
+    /// Everything the club page needs in a single database round-trip (one batched command,
+    /// multiple result sets). Pending requests are only fetched when the caller may manage them.
+    /// </summary>
+    public async Task<ClubPageData?> GetOverviewAsync(Guid clubId, bool includePending, int lobbyLimit = 20, int matchLimit = 50)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        using var grid = await conn.QueryMultipleAsync(
+            """
+            select id "Id", name "Name", slug "Slug", owner_user_id "OwnerUserId",
+                   invite_code "InviteCode", created_at "CreatedAt"
+            from clubs where id = @clubId;
+
+            select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", u.riot_game_name "RiotGameName", u.riot_tag_line "RiotTagLine",
+                   m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+            from club_members m
+            join users u on u.id = m.user_id
+            where m.club_id = @clubId and m.status = @approved
+            order by m.role desc, u.discord_username;
+
+            select m.club_id "ClubId", m.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", u.riot_game_name "RiotGameName", u.riot_tag_line "RiotTagLine",
+                   m.role "Role", m.status "Status", m.joined_at "JoinedAt"
+            from club_members m
+            join users u on u.id = m.user_id
+            where @includePending and m.club_id = @clubId and m.status = @pending
+            order by m.joined_at;
+
+            select l.id "Id", l.club_id "ClubId", l.created_by_user_id "CreatedByUserId",
+                   l.status "Status", l.game_mode "GameMode", l.assign_champions "AssignChampions", l.created_at "CreatedAt",
+                   (select count(*) from lobby_players p where p.lobby_id = l.id)::int "PlayerCount"
+            from lobbies l where l.club_id = @clubId
+            order by l.created_at desc
+            limit @lobbyLimit;
+
+            select id "Id", club_id "ClubId", lobby_id "LobbyId", riot_match_id "RiotMatchId",
+                   played_at "PlayedAt", queue_id "QueueId", riot_game_mode "RiotGameMode", game_duration_seconds "GameDurationSeconds"
+            from matches where club_id = @clubId
+            order by played_at desc limit @matchLimit;
+
+            select p.match_id "MatchId", p.user_id "UserId", u.discord_username "DiscordUsername",
+                   u.avatar_url "AvatarUrl", p.champion_id "ChampionId", p.team "Team",
+                   p.kills "Kills", p.deaths "Deaths", p.assists "Assists", p.win "Win"
+            from match_participants p
+            join users u on u.id = p.user_id
+            where p.match_id in (select id from matches where club_id = @clubId order by played_at desc limit @matchLimit)
+            order by p.team, u.discord_username;
+
+            select champion_id from club_banned_champions where club_id = @clubId order by champion_id;
+            """,
+            new
+            {
+                clubId,
+                includePending,
+                lobbyLimit,
+                matchLimit,
+                approved = (int)ClubMembershipStatus.Approved,
+                pending = (int)ClubMembershipStatus.Pending,
+            });
+
+        var club = await grid.ReadSingleOrDefaultAsync<Club>();
+        if (club is null)
+            return null;
+
+        var members = (await grid.ReadAsync<ClubMemberView>()).ToList();
+        var pendingRequests = (await grid.ReadAsync<ClubMemberView>()).ToList();
+        var lobbies = (await grid.ReadAsync<LobbyListItem>()).ToList();
+        var matches = (await grid.ReadAsync<MatchSummary>()).ToList();
+        var participants = (await grid.ReadAsync<MatchParticipantView>()).ToLookup(p => p.MatchId);
+        var bans = (await grid.ReadAsync<int>()).ToList();
+
+        foreach (var m in matches)
+            m.Participants = participants[m.Id].ToList();
+
+        return new ClubPageData(club, members, pendingRequests, lobbies, matches, bans);
     }
 
     public async Task<IEnumerable<ClubOverview>> GetAllAsync()
