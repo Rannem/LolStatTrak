@@ -2,7 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
-import { Lobby, LobbyPlayer, Team } from '../../core/models/models';
+import { CorrelationResult, Lobby, LobbyPlayer, Team, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
 import { LobbyHubService } from '../../core/services/lobby-hub.service';
@@ -20,30 +20,38 @@ import { LobbyService } from '../../core/services/lobby.service';
 
       <div class="page-header">
         <div>
-          <div class="eyebrow">Custom ARAM</div>
+          <div class="eyebrow">{{ modeLabel(lobby()?.gameMode) || 'Custom game' }}{{ lobby() && !lobby()!.assignChampions ? ' · teams only' : '' }}</div>
           <h1>Lobby</h1>
           <div class="row small muted">
-            <span class="badge" [class.blue]="lobby()?.status === 'Open'" [class.gold]="lobby()?.status === 'Rolled'">{{ lobby()?.status ?? '…' }}</span>
+            <span class="badge" [class.blue]="lobby()?.status === 'Open'" [class.gold]="lobby()?.status === 'Rolled'" [class.green]="lobby()?.status === 'Played'">{{ lobby()?.status ?? '…' }}</span>
             <span>{{ players().length }} player{{ players().length === 1 ? '' : 's' }}</span>
             <span class="live" [class.on]="connected()">● {{ connected() ? 'live' : 'connecting' }}</span>
           </div>
         </div>
 
         <div class="row">
-          @if (!amIn()) {
+          @if (!amIn() && !isPlayed()) {
             <button class="btn-accent" (click)="join()" [disabled]="busy()">Join lobby</button>
           }
-          <button class="btn-primary" (click)="roll()" [disabled]="busy() || players().length === 0">
-            🎲 {{ isRolled() ? 'Re-roll' : 'Roll teams & champions' }}
-          </button>
-          @if (isRolled()) {
+          @if (!isPlayed()) {
+            <button class="btn-primary" (click)="roll()" [disabled]="busy() || players().length === 0">
+              🎲 {{ isRolled() ? 'Re-roll' : (assignChampions() ? 'Roll teams & champions' : 'Roll teams') }}
+            </button>
+          }
+          @if (isRolled() && !isPlayed()) {
             <button class="btn-ghost" (click)="markPlayed()" [disabled]="busy()">Mark as played</button>
+          }
+          @if (isPlayed() && !matchFound()) {
+            <button class="btn-ghost" (click)="syncStats()" [disabled]="busy()">↻ Sync stats</button>
           }
         </div>
       </div>
 
       @if (error()) {
         <div class="card error">{{ error() }}</div>
+      }
+      @if (notice()) {
+        <div class="card notice">{{ notice() }}</div>
       }
 
       @if (isRolled()) {
@@ -92,7 +100,7 @@ import { LobbyService } from '../../core/services/lobby.service';
 
     <ng-template #playerCard let-p>
       @let champ = champions.get(p.assignedChampionId);
-      <div class="player-card" [style.background-image]="champ ? 'url(' + champ.splashUrl + ')' : ''">
+      <div class="player-card" [class.no-champ]="!champ" [style.background-image]="champ ? 'url(' + champ.splashUrl + ')' : ''">
         <div class="player-card-shade"></div>
         <div class="player-card-body">
           <div class="who">
@@ -105,17 +113,19 @@ import { LobbyService } from '../../core/services/lobby.service';
               <a routerLink="/profile" class="badge unlinked" title="No Riot account linked — stats won't be tracked">no riot id</a>
             }
           </div>
-          <div class="champ">
-            @if (champ) {
+          @if (champ) {
+            <div class="champ">
               <img class="champ-icon" [src]="champ.iconUrl" [alt]="champ.name" />
               <div>
                 <div class="champ-name">{{ champ.name }}</div>
                 <div class="champ-title">{{ champ.title }}</div>
               </div>
-            } @else {
-              <div class="champ-name muted">Champion #{{ p.assignedChampionId }}</div>
-            }
-          </div>
+            </div>
+          } @else if (p.assignedChampionId) {
+            <div class="champ"><div class="champ-name muted">Champion #{{ p.assignedChampionId }}</div></div>
+          } @else if (p.riotGameName) {
+            <div class="riot-id muted">{{ p.riotGameName }}<span class="dim">#{{ p.riotTagLine }}</span></div>
+          }
         </div>
       </div>
     </ng-template>
@@ -144,6 +154,17 @@ import { LobbyService } from '../../core/services/lobby.service';
       border-color: var(--danger);
       color: var(--danger);
       margin-bottom: 1.25rem;
+    }
+
+    .notice {
+      border-color: var(--gold-4);
+      color: var(--gold-1);
+      margin-bottom: 1.25rem;
+    }
+
+    .badge.green {
+      color: var(--success);
+      border-color: rgba(60, 200, 120, 0.5);
     }
 
     .waiting li {
@@ -247,6 +268,15 @@ import { LobbyService } from '../../core/services/lobby.service';
         transform: translateY(-2px);
         box-shadow: var(--glow-gold);
       }
+
+      &.no-champ {
+        min-height: 0;
+        background: linear-gradient(135deg, var(--bg-3), var(--surface));
+      }
+    }
+
+    .riot-id {
+      font-size: 0.8rem;
     }
 
     .player-card-shade {
@@ -322,10 +352,15 @@ export class LobbyComponent implements OnInit, OnDestroy {
   protected readonly connected = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
+  protected readonly notice = signal('');
+  protected readonly matchFound = signal(false);
 
   protected readonly fallbackAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
+  protected readonly modeLabel = gameModeLabel;
 
   protected readonly isRolled = computed(() => this.players().some((p) => p.assignedTeam != null));
+  protected readonly isPlayed = computed(() => this.lobby()?.status === 'Played');
+  protected readonly assignChampions = computed(() => this.lobby()?.assignChampions ?? true);
   protected readonly amIn = computed(() => this.players().some((p) => p.userId === this.auth.user()?.id));
 
   private subs = new Subscription();
@@ -337,6 +372,7 @@ export class LobbyComponent implements OnInit, OnDestroy {
     this.lobbyService.get(this.lobbyId).subscribe((state) => {
       this.lobby.set(state.lobby);
       this.players.set(state.players);
+      this.matchFound.set(!!state.matchId);
     });
 
     this.subs.add(this.hub.lobbyRolled$.subscribe((players) => {
@@ -345,6 +381,9 @@ export class LobbyComponent implements OnInit, OnDestroy {
     }));
     this.subs.add(this.hub.playerJoined$.subscribe((evt) => {
       if (evt.lobbyId === this.lobbyId) this.players.set(evt.players);
+    }));
+    this.subs.add(this.hub.lobbyPlayed$.subscribe((evt) => {
+      if (evt.lobbyId === this.lobbyId) this.applyCorrelation(evt.result);
     }));
 
     try {
@@ -376,12 +415,34 @@ export class LobbyComponent implements OnInit, OnDestroy {
   }
 
   markPlayed(): void {
-    this.run(this.lobbyService.markPlayed(this.lobbyId), (res) => {
-      this.lobby.update((l) => (l ? { ...l, status: 'Played' } : l));
-      if (!res.matchId) {
-        this.error.set('Marked as played, but no matching Riot game was found yet (players may need linked Riot accounts).');
-      }
-    });
+    this.run(this.lobbyService.markPlayed(this.lobbyId), (res) => this.applyCorrelation(res));
+  }
+
+  syncStats(): void {
+    this.run(this.lobbyService.syncStats(this.lobbyId), (res) => this.applyCorrelation(res));
+  }
+
+  private applyCorrelation(res: CorrelationResult): void {
+    this.lobby.update((l) => (l ? { ...l, status: 'Played' } : l));
+    this.notice.set('');
+    switch (res.outcome) {
+      case 'Found':
+        this.matchFound.set(true);
+        this.notice.set('Game found — stats have been recorded. Check the club\u2019s Matches tab.');
+        break;
+      case 'NoLinkedPlayers':
+        this.error.set('Nobody in this lobby has linked a Riot account, so the game can\u2019t be looked up. Link one under Profile, then hit Sync stats.');
+        break;
+      case 'NotFoundYet':
+        this.notice.set(
+          `No matching game in Riot\u2019s history yet (${res.linkedPlayers}/${res.totalPlayers} players linked). ` +
+            'Riot usually needs a few minutes after the game ends — hit Sync stats again shortly.',
+        );
+        break;
+      case 'RiotError':
+        this.error.set(`Riot API error while looking up the game${res.detail ? ': ' + res.detail : ''}. Try Sync stats again in a minute.`);
+        break;
+    }
   }
 
   private run<T>(obs: Observable<T>, onNext: (v: T) => void): void {

@@ -116,3 +116,43 @@ club deletion) is written to `audit_log` and visible in the club's **Audit** tab
 resolved to a PUUID via account-v1 and required for that player's match stats to be
 tracked. Players without a linked account show a red `no riot id` badge in lobbies.
 
+## Game modes
+
+When starting a lobby you pick a mode, which decides what the randomizer does:
+
+| Mode | What we roll | Notes |
+|---|---|---|
+| **ARAM** | teams + champions | Howling Abyss custom with blind pick; champions respect the club ban list |
+| **ARAM Mayhem** | teams only | The client forces all-random for Mayhem, so champion rolling is disabled |
+| **Summoner's Rift 5v5** | teams (+ champions if ticked) | Untick "Also roll champions" for a normal draft/blind |
+
+## How games are found & stats gathered
+
+There is no push from Riot for custom games, so after the game someone in the lobby hits
+**Mark as played**. The backend then:
+
+1. Takes every lobby player with a **linked Riot account** (PUUID). Unlinked players are
+   invisible to the lookup — they can still play, but they won't get stats.
+2. Pulls each linked player's 5 most recent match ids (match-v5) and fetches those matches.
+3. Accepts the first match that
+   - ended **after the lobby was created**,
+   - isn't already recorded, and
+   - contains **enough of the lobby's linked players**: at least 2 and at least half of them
+     (with only one linked player, the match must additionally be a custom game, `queueId 0`).
+4. Stores the match (queue, Riot game mode, duration, raw payload) and a stat line per
+   linked participant (champion, team, K/D/A, win). The lobby's team roll is *not* used for
+   stats — what actually happened in the Riot match is.
+
+Requirements/caveats:
+
+- **At least 2 lobby players should have linked Riot accounts** for reliable matching
+  (more = safer). One linked player works only for custom games.
+- **Riot needs a few minutes** after the game ends before it appears in match history. If
+  "Mark as played" reports nothing found, use **Sync stats** on the lobby to retry.
+- **Custom games must be recorded by Riot** — Riot only saves customs to match history when
+  there are enough human players (their documented threshold is 5+ humans; bot-filled or
+  tiny customs are dropped and can never be fetched).
+- **All players must be on the same regional routing** as `RIOT_REGION` (default `europe`).
+- The Riot Personal key has tight rate limits (20/s, 100/2min); one sync uses roughly
+  `linked players + candidate matches` requests, which is fine for a friend group.
+

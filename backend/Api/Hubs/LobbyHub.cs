@@ -26,4 +26,5 @@ public static class LobbyHubEvents
 {
     public const string PlayerJoined = "PlayerJoined";
     public const string LobbyRolled = "LobbyRolled";
+    public const string LobbyPlayed = "LobbyPlayed";
 }

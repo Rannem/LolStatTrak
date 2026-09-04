@@ -72,6 +72,8 @@ export interface MatchSummary {
   riotMatchId: string;
   playedAt: string;
   queueId: number;
+  riotGameMode?: string | null;
+  gameDurationSeconds?: number | null;
   participants: MatchParticipant[];
 }
 
@@ -89,13 +91,36 @@ export interface AuditEntry {
 }
 
 export type LobbyStatus = 'Open' | 'Rolled' | 'Played';
+export type LobbyGameMode = 'Aram' | 'AramMayhem' | 'SummonersRift';
+
+export const GAME_MODES: { value: LobbyGameMode; label: string; hint: string; canAssignChampions: boolean }[] = [
+  { value: 'Aram', label: 'ARAM', hint: 'Howling Abyss custom, blind pick — we roll teams and champions.', canAssignChampions: true },
+  { value: 'AramMayhem', label: 'ARAM Mayhem', hint: 'Client forces all-random — we only roll teams.', canAssignChampions: false },
+  { value: 'SummonersRift', label: "Summoner's Rift 5v5", hint: 'Normal map custom — roll teams, optionally champions too.', canAssignChampions: true },
+];
+
+export function gameModeLabel(mode: LobbyGameMode | undefined | null): string {
+  return GAME_MODES.find((m) => m.value === mode)?.label ?? mode ?? '';
+}
 
 export interface Lobby {
   id: string;
   clubId: string;
   createdByUserId: string;
   status: LobbyStatus;
+  gameMode: LobbyGameMode;
+  assignChampions: boolean;
   createdAt: string;
+}
+
+export type CorrelationOutcome = 'Found' | 'NoLinkedPlayers' | 'NotFoundYet' | 'RiotError';
+
+export interface CorrelationResult {
+  outcome: CorrelationOutcome;
+  matchId: string | null;
+  linkedPlayers: number;
+  totalPlayers: number;
+  detail?: string | null;
 }
 
 export type Team = 'Blue' | 'Red';
@@ -114,6 +139,7 @@ export interface LobbyPlayer {
 export interface LobbyState {
   lobby: Lobby;
   players: LobbyPlayer[];
+  matchId?: string | null;
 }
 
 export interface Champion {

@@ -1,15 +1,15 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Lobby, LobbyPlayer, LobbyState } from '../models/models';
+import { CorrelationResult, Lobby, LobbyGameMode, LobbyPlayer, LobbyState } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class LobbyService {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiBaseUrl}/lobbies`;
 
-  createLobby(clubId: string) {
-    return this.http.post<Lobby>(this.base, { clubId }, { withCredentials: true });
+  createLobby(clubId: string, gameMode: LobbyGameMode, assignChampions: boolean) {
+    return this.http.post<Lobby>(this.base, { clubId, gameMode, assignChampions }, { withCredentials: true });
   }
 
   get(lobbyId: string) {
@@ -25,6 +25,10 @@ export class LobbyService {
   }
 
   markPlayed(lobbyId: string) {
-    return this.http.post<{ matchId: string | null }>(`${this.base}/${lobbyId}/mark-played`, {}, { withCredentials: true });
+    return this.http.post<CorrelationResult>(`${this.base}/${lobbyId}/mark-played`, {}, { withCredentials: true });
+  }
+
+  syncStats(lobbyId: string) {
+    return this.http.post<CorrelationResult>(`${this.base}/${lobbyId}/sync-stats`, {}, { withCredentials: true });
   }
 }

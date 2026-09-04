@@ -19,17 +19,23 @@ public class LobbyPlayerView
 
 public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
 {
-    public async Task<Lobby> CreateAsync(Guid clubId, Guid createdByUserId)
+    public async Task<Lobby> CreateAsync(Guid clubId, Guid createdByUserId, LobbyGameMode gameMode, bool assignChampions)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();
         return await conn.QuerySingleAsync<Lobby>(
             """
-            insert into lobbies (id, club_id, created_by_user_id, status, created_at)
-            values (gen_random_uuid(), @clubId, @createdByUserId, @status, now())
+            insert into lobbies (id, club_id, created_by_user_id, status, game_mode, assign_champions, created_at)
+            values (gen_random_uuid(), @clubId, @createdByUserId, @status, @gameMode, @assignChampions, now())
             returning id "Id", club_id "ClubId", created_by_user_id "CreatedByUserId",
-                      status "Status", created_at "CreatedAt"
+                      status "Status", game_mode "GameMode", assign_champions "AssignChampions", created_at "CreatedAt"
             """,
-            new { clubId, createdByUserId, status = (int)LobbyStatus.Open });
+            new { clubId, createdByUserId, status = (int)LobbyStatus.Open, gameMode = (int)gameMode, assignChampions });
+    }
+
+    public async Task SetStatusAsync(Guid lobbyId, LobbyStatus status)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        await conn.ExecuteAsync("update lobbies set status = @status where id = @lobbyId", new { lobbyId, status = (int)status });
     }
 
     public async Task<Lobby?> GetAsync(Guid lobbyId)
@@ -38,7 +44,7 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QuerySingleOrDefaultAsync<Lobby>(
             """
             select id "Id", club_id "ClubId", created_by_user_id "CreatedByUserId",
-                   status "Status", created_at "CreatedAt"
+                   status "Status", game_mode "GameMode", assign_champions "AssignChampions", created_at "CreatedAt"
             from lobbies where id = @lobbyId
             """,
             new { lobbyId });
@@ -96,7 +102,7 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QueryAsync<Lobby>(
             """
             select id "Id", club_id "ClubId", created_by_user_id "CreatedByUserId",
-                   status "Status", created_at "CreatedAt"
+                   status "Status", game_mode "GameMode", assign_champions "AssignChampions", created_at "CreatedAt"
             from lobbies where club_id = @clubId
             order by created_at desc
             limit @limit

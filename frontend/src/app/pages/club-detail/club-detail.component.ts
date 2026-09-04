@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { AuditEntry, ClubDetail, ClubMember, ClubRole, Lobby, MatchSummary } from '../../core/models/models';
+import { AuditEntry, ClubDetail, ClubMember, ClubRole, GAME_MODES, Lobby, LobbyGameMode, MatchSummary, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
 import { ClubService } from '../../core/services/club.service';
@@ -29,7 +29,31 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
               <button class="btn-ghost btn-sm copy" (click)="copyInvite(club.inviteCode)">{{ copied() ? 'Copied!' : 'Copy' }}</button>
             </div>
           </div>
-          <button class="btn-primary" (click)="createLobby()" [disabled]="busy()">🎲 Start a new lobby</button>
+          <div class="new-lobby">
+            <button class="btn-primary" (click)="showNewLobby.set(!showNewLobby())" [disabled]="busy()">🎲 Start a new lobby</button>
+            @if (showNewLobby()) {
+              <div class="card new-lobby-panel">
+                <h3>Game mode</h3>
+                <div class="modes">
+                  @for (m of gameModes; track m.value) {
+                    <button class="mode" [class.active]="newMode() === m.value" (click)="pickMode(m.value)">
+                      <span class="mode-label">{{ m.label }}</span>
+                      <span class="mode-hint">{{ m.hint }}</span>
+                    </button>
+                  }
+                </div>
+                <label class="check" [class.disabled]="!modeAllowsChampions()">
+                  <input type="checkbox" [checked]="newAssignChampions()" [disabled]="!modeAllowsChampions()"
+                         (change)="newAssignChampions.set($any($event.target).checked)" />
+                  Also roll champions (respects the ban list)
+                </label>
+                <div class="row">
+                  <button class="btn-accent" (click)="createLobby()" [disabled]="busy()">Create lobby</button>
+                  <button class="btn-ghost" (click)="showNewLobby.set(false)">Cancel</button>
+                </div>
+              </div>
+            }
+          </div>
         </div>
 
         <nav class="tabs">
@@ -65,6 +89,7 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
                       <li>
                         <a [routerLink]="['/lobbies', lobby.id]" class="lobby-row">
                           <span class="badge" [class.blue]="lobby.status === 'Open'" [class.gold]="lobby.status === 'Rolled'">{{ lobby.status }}</span>
+                          <span class="mode-tag">{{ modeLabel(lobby.gameMode) }}{{ lobby.assignChampions ? '' : ' · teams only' }}</span>
                           <span class="muted">{{ lobby.createdAt | date: 'MMM d, HH:mm' }}</span>
                           <span class="chev">›</span>
                         </a>
@@ -114,6 +139,12 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
                     <article class="match">
                       <header>
                         <span class="dim small">{{ m.playedAt | date: 'MMM d, y · HH:mm' }}</span>
+                        @if (m.riotGameMode) {
+                          <span class="mode-tag">{{ m.riotGameMode }}</span>
+                        }
+                        @if (m.gameDurationSeconds) {
+                          <span class="dim small">{{ duration(m.gameDurationSeconds) }}</span>
+                        }
                         <span class="dim small mono">{{ m.riotMatchId }}</span>
                         @if (club.canAdminister) {
                           <button class="btn-danger btn-sm" (click)="deleteMatch(m)">Remove game</button>
@@ -287,6 +318,76 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
     .copy {
       margin-left: 0.5rem;
     }
+    .new-lobby {
+      position: relative;
+    }
+    .new-lobby-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.5rem);
+      width: min(420px, 90vw);
+      z-index: 5;
+      display: grid;
+      gap: 0.85rem;
+
+      h3 {
+        margin: 0;
+      }
+    }
+    .modes {
+      display: grid;
+      gap: 0.5rem;
+    }
+    .mode {
+      display: grid;
+      gap: 0.15rem;
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-3);
+      color: var(--text);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: normal;
+      font-family: inherit;
+
+      &:hover {
+        border-color: var(--gold-4);
+      }
+      &.active {
+        border-color: var(--gold-3);
+        background: rgba(200, 155, 60, 0.12);
+        box-shadow: var(--glow-gold);
+      }
+      .mode-label {
+        font-family: 'Cinzel', serif;
+        font-weight: 700;
+        color: var(--gold-1);
+      }
+      .mode-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+
+      &.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+    .mode-tag {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gold-2);
+    }
     .rows li {
       display: flex;
       align-items: center;
@@ -443,7 +544,28 @@ export class ClubDetailComponent implements OnInit {
   protected readonly copied = signal(false);
   protected readonly error = signal('');
 
+  protected readonly gameModes = GAME_MODES;
+  protected readonly showNewLobby = signal(false);
+  protected readonly newMode = signal<LobbyGameMode>('Aram');
+  protected readonly newAssignChampions = signal(true);
+  protected readonly modeAllowsChampions = computed(
+    () => GAME_MODES.find((m) => m.value === this.newMode())?.canAssignChampions ?? true,
+  );
+  protected readonly modeLabel = gameModeLabel;
+
   protected readonly fallbackAvatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+  protected pickMode(mode: LobbyGameMode): void {
+    this.newMode.set(mode);
+    if (!this.modeAllowsChampions()) this.newAssignChampions.set(false);
+    else this.newAssignChampions.set(true);
+  }
+
+  protected duration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
 
   ngOnInit(): void {
     this.clubId = this.route.snapshot.paramMap.get('clubId') ?? '';
@@ -560,7 +682,7 @@ export class ClubDetailComponent implements OnInit {
 
   createLobby(): void {
     this.busy.set(true);
-    this.lobbyService.createLobby(this.clubId).subscribe({
+    this.lobbyService.createLobby(this.clubId, this.newMode(), this.newAssignChampions()).subscribe({
       next: (lobby) => this.router.navigate(['/lobbies', lobby.id]),
       error: (e) => {
         this.fail(e);

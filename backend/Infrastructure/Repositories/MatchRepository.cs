@@ -14,6 +14,14 @@ public class MatchRepository(NpgsqlConnectionFactory connectionFactory)
             new { riotMatchId });
     }
 
+    public async Task<Guid?> GetIdForLobbyAsync(Guid lobbyId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteScalarAsync<Guid?>(
+            "select id from matches where lobby_id = @lobbyId limit 1",
+            new { lobbyId });
+    }
+
     public async Task<Guid> InsertAsync(Match match, IEnumerable<MatchParticipant> participants)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();
@@ -21,8 +29,8 @@ public class MatchRepository(NpgsqlConnectionFactory connectionFactory)
 
         var matchId = await conn.ExecuteScalarAsync<Guid>(
             """
-            insert into matches (id, club_id, lobby_id, riot_match_id, played_at, queue_id, raw_payload)
-            values (gen_random_uuid(), @ClubId, @LobbyId, @RiotMatchId, @PlayedAt, @QueueId, @RawPayload::jsonb)
+            insert into matches (id, club_id, lobby_id, riot_match_id, played_at, queue_id, riot_game_mode, game_duration_seconds, raw_payload)
+            values (gen_random_uuid(), @ClubId, @LobbyId, @RiotMatchId, @PlayedAt, @QueueId, @RiotGameMode, @GameDurationSeconds, @RawPayload::jsonb)
             returning id
             """,
             match, tx);
@@ -50,7 +58,7 @@ public class MatchRepository(NpgsqlConnectionFactory connectionFactory)
         var matches = (await conn.QueryAsync<MatchSummary>(
             """
             select id "Id", club_id "ClubId", lobby_id "LobbyId", riot_match_id "RiotMatchId",
-                   played_at "PlayedAt", queue_id "QueueId"
+                   played_at "PlayedAt", queue_id "QueueId", riot_game_mode "RiotGameMode", game_duration_seconds "GameDurationSeconds"
             from matches where club_id = @clubId
             order by played_at desc limit @limit
             """,
@@ -84,7 +92,7 @@ public class MatchRepository(NpgsqlConnectionFactory connectionFactory)
         return await conn.QuerySingleOrDefaultAsync<MatchSummary>(
             """
             select id "Id", club_id "ClubId", lobby_id "LobbyId", riot_match_id "RiotMatchId",
-                   played_at "PlayedAt", queue_id "QueueId"
+                   played_at "PlayedAt", queue_id "QueueId", riot_game_mode "RiotGameMode", game_duration_seconds "GameDurationSeconds"
             from matches where id = @matchId
             """,
             new { matchId });
@@ -106,6 +114,8 @@ public class MatchSummary
     public string RiotMatchId { get; set; } = string.Empty;
     public DateTimeOffset PlayedAt { get; set; }
     public int QueueId { get; set; }
+    public string? RiotGameMode { get; set; }
+    public int? GameDurationSeconds { get; set; }
     public List<MatchParticipantView> Participants { get; set; } = [];
 }
 

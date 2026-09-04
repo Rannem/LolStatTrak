@@ -2,15 +2,16 @@ import { Injectable } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
 import { Subject } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { LobbyPlayer } from '../models/models';
+import { CorrelationResult, LobbyPlayer } from '../models/models';
 
-/** Wraps the LobbyHub SignalR connection: live join/roll events per lobby, for the current lobby view. */
+/** Wraps the LobbyHub SignalR connection: live join/roll/played events per lobby, for the current lobby view. */
 @Injectable({ providedIn: 'root' })
 export class LobbyHubService {
   private connection?: signalR.HubConnection;
 
   readonly playerJoined$ = new Subject<{ lobbyId: string; userId: string; players: LobbyPlayer[] }>();
   readonly lobbyRolled$ = new Subject<LobbyPlayer[]>();
+  readonly lobbyPlayed$ = new Subject<{ lobbyId: string; result: CorrelationResult }>();
 
   async connectAndJoin(lobbyId: string): Promise<void> {
     if (!this.connection) {
@@ -21,6 +22,7 @@ export class LobbyHubService {
 
       this.connection.on('PlayerJoined', (payload) => this.playerJoined$.next(payload));
       this.connection.on('LobbyRolled', (payload) => this.lobbyRolled$.next(payload));
+      this.connection.on('LobbyPlayed', (payload) => this.lobbyPlayed$.next(payload));
 
       await this.connection.start();
     }

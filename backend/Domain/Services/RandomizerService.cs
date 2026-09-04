@@ -6,22 +6,20 @@ namespace LolStatTrak.Domain.Services;
 public class RandomizerService
 {
     /// <summary>
-    /// Splits <paramref name="userIds"/> into two even (as possible) random teams and assigns each
-    /// player a random champion drawn from <paramref name="allChampionIds"/> minus <paramref name="bannedChampionIds"/>.
+    /// Splits <paramref name="userIds"/> into two even (as possible) random teams and, when
+    /// <paramref name="assignChampions"/> is set, gives each player a random champion drawn from
+    /// <paramref name="allChampionIds"/> minus <paramref name="bannedChampionIds"/>.
     /// Champions are drawn without replacement across the whole lobby when the pool is large enough.
     /// </summary>
     public IReadOnlyList<LobbyPlayer> Roll(
         Guid lobbyId,
         IReadOnlyList<Guid> userIds,
         IReadOnlyCollection<int> allChampionIds,
-        IReadOnlyCollection<int> bannedChampionIds)
+        IReadOnlyCollection<int> bannedChampionIds,
+        bool assignChampions = true)
     {
         if (userIds.Count == 0)
             return [];
-
-        var championPool = allChampionIds.Except(bannedChampionIds).ToList();
-        if (championPool.Count == 0)
-            throw new InvalidOperationException("No champions available after applying the club's ban list.");
 
         var random = Random.Shared;
 
@@ -29,6 +27,17 @@ public class RandomizerService
         var teamSplit = shuffledUsers
             .Select((userId, index) => (userId, team: index % 2 == 0 ? LobbyTeam.Blue : LobbyTeam.Red))
             .ToList();
+
+        if (!assignChampions)
+        {
+            return teamSplit
+                .Select(t => new LobbyPlayer { LobbyId = lobbyId, UserId = t.userId, AssignedTeam = t.team, AssignedChampionId = null })
+                .ToList();
+        }
+
+        var championPool = allChampionIds.Except(bannedChampionIds).ToList();
+        if (championPool.Count == 0)
+            throw new InvalidOperationException("No champions available after applying the club's ban list.");
 
         // Draw without replacement while the pool covers everyone, otherwise allow repeats.
         var shuffledChampions = championPool.OrderBy(_ => random.Next()).ToList();

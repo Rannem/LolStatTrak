@@ -9,6 +9,9 @@ public class Match
     public string RiotMatchId { get; set; } = string.Empty;
     public DateTimeOffset PlayedAt { get; set; }
     public int QueueId { get; set; }
+    /// <summary>Riot's info.gameMode, e.g. ARAM or CLASSIC.</summary>
+    public string? RiotGameMode { get; set; }
+    public int? GameDurationSeconds { get; set; }
 
     /// <summary>Full match-v5 response payload, kept for flexibility/future stat additions.</summary>
     public string RawPayload { get; set; } = string.Empty;
