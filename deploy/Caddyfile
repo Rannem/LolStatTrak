@@ -22,7 +22,11 @@
 	}
 
 	# Angular SPA: serve static files, falling back to index.html for client-side routes.
-	root * /srv
-	try_files {path} /index.html
-	file_server
+	# Wrapped in its own handle block so it's mutually exclusive with the /api and /hubs
+	# handlers above instead of potentially running alongside them.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
 }
