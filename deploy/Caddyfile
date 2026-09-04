@@ -9,12 +9,20 @@
 	# Reverse-proxy API + SignalR traffic to the backend over Railway's private network
 	# (BACKEND_INTERNAL_URL e.g. "backend.railway.internal:8080") — keeps API calls off
 	# the public internet entirely, saving egress cost.
+	#
+	# Railway's edge always terminates TLS before reaching this container (auto_https is
+	# off here because Caddy only ever sees plain HTTP internally), so we must hardcode
+	# X-Forwarded-Proto to https - otherwise the backend thinks the original request was
+	# plain HTTP and builds incorrect http:// URLs (e.g. the Discord OAuth redirect_uri).
 	handle /api/* {
-		reverse_proxy {$BACKEND_INTERNAL_URL}
+		reverse_proxy {$BACKEND_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
 	}
 
 	handle /hubs/* {
 		reverse_proxy {$BACKEND_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
 			# WebSocket upgrade support for the SignalR hub.
 			header_up Connection {>Connection}
 			header_up Upgrade {>Upgrade}
