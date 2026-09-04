@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Api/">
+    <Project Path="Api/LolStatTrak.Api.csproj" />
+  </Folder>
+  <Folder Name="/Domain/">
+    <Project Path="Domain/LolStatTrak.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="Infrastructure/LolStatTrak.Infrastructure.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,28 @@
+{
+	# Railway supplies the public port via $PORT; default to 8080 for local docker runs.
+	auto_https off
+}
+
+:{$PORT:8080} {
+	encode gzip
+
+	# Reverse-proxy API + SignalR traffic to the backend over Railway's private network
+	# (BACKEND_INTERNAL_URL e.g. "backend.railway.internal:8080") — keeps API calls off
+	# the public internet entirely, saving egress cost.
+	handle /api/* {
+		reverse_proxy {$BACKEND_INTERNAL_URL}
+	}
+
+	handle /hubs/* {
+		reverse_proxy {$BACKEND_INTERNAL_URL} {
+			# WebSocket upgrade support for the SignalR hub.
+			header_up Connection {>Connection}
+			header_up Upgrade {>Upgrade}
+		}
+	}
+
+	# Angular SPA: serve static files, falling back to index.html for client-side routes.
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
