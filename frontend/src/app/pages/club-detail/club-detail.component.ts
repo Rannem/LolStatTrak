@@ -577,13 +577,17 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     this.clubId = this.route.snapshot.paramMap.get('clubId') ?? '';
     this.champions.ensureLoaded();
 
-    // Paint instantly from a hover-prefetch / recent visit, then revalidate.
+    // Paint instantly from a hover-prefetch / recent visit. If that copy is only seconds old,
+    // trust it (the hub feed keeps lobbies live); otherwise revalidate in the background.
+    // If the prefetch is still in flight, getOverview() joins it instead of issuing a second call.
     const cached = this.clubService.peekOverview(this.clubId);
-    if (cached) this.applyOverview(cached);
-    this.clubService.getOverview(this.clubId).subscribe({
-      next: (data) => this.applyOverview(data),
-      error: () => this.router.navigateByUrl('/clubs'),
-    });
+    if (cached) this.applyOverview(cached.data);
+    if (!cached?.fresh) {
+      this.clubService.getOverview(this.clubId).subscribe({
+        next: (data) => this.applyOverview(data),
+        error: () => this.router.navigateByUrl('/clubs'),
+      });
+    }
 
     this.subs.add(this.hub.clubLobbyUpserted$.subscribe((lobby) => {
       if (lobby.clubId !== this.clubId) return;
