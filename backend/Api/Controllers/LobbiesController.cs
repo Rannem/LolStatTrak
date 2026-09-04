@@ -41,6 +41,7 @@ public class LobbiesController(
         await lobbyRepository.JoinAsync(lobby.Id, CurrentUserId);
         await audit.LogAsync(request.ClubId, CurrentUserId, "lobby.created", "lobby", lobby.Id.ToString(),
             new { GameMode = request.GameMode.ToString(), AssignChampions = assignChampions });
+        await BroadcastLobbyChanged(lobby.Id);
         return Ok(lobby);
     }
 
@@ -100,6 +101,7 @@ public class LobbiesController(
         var views = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
             .SendAsync(LobbyHubEvents.LobbyRolled, views, ct);
+        await BroadcastLobbyChanged(lobbyId, ct);
 
         return Ok(views);
     }
@@ -127,6 +129,7 @@ public class LobbiesController(
 
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
             .SendAsync(LobbyHubEvents.LobbyPlayed, new { lobbyId, result }, ct);
+        await BroadcastLobbyChanged(lobbyId, ct);
         return Ok(result);
     }
 
@@ -153,5 +156,15 @@ public class LobbiesController(
                 .SendAsync(LobbyHubEvents.LobbyPlayed, new { lobbyId, result }, ct);
         }
         return Ok(result);
+    }
+
+    /// <summary>Pushes the lobby's current metadata to everyone watching the club page.</summary>
+    private async Task BroadcastLobbyChanged(Guid lobbyId, CancellationToken ct = default)
+    {
+        var lobby = await lobbyRepository.GetAsync(lobbyId);
+        if (lobby is null)
+            return;
+        await hubContext.Clients.Group(LobbyHub.ClubGroupName(lobby.ClubId.ToString()))
+            .SendAsync(LobbyHubEvents.ClubLobbyUpserted, lobby, ct);
     }
 }

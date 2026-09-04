@@ -1,8 +1,10 @@
 using LolStatTrak.Api.Auth;
+using LolStatTrak.Api.Hubs;
 using LolStatTrak.Domain.Entities;
 using LolStatTrak.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace LolStatTrak.Api.Controllers;
 
@@ -19,7 +21,8 @@ public class ClubsController(
     LobbyRepository lobbyRepository,
     MatchRepository matchRepository,
     AuditRepository audit,
-    ClubAccess access) : ControllerBase
+    ClubAccess access,
+    IHubContext<LobbyHub> hubContext) : ControllerBase
 {
     private Guid CurrentUserId => User.GetUserId();
 
@@ -224,6 +227,8 @@ public class ClubsController(
 
         await lobbyRepository.DeleteAsync(lobbyId);
         await audit.LogAsync(clubId, CurrentUserId, "lobby.deleted", "lobby", lobbyId.ToString(), new { lobby.Status, lobby.CreatedAt });
+        await hubContext.Clients.Group(LobbyHub.ClubGroupName(clubId.ToString()))
+            .SendAsync(LobbyHubEvents.ClubLobbyDeleted, new { clubId, lobbyId });
         return NoContent();
     }
 

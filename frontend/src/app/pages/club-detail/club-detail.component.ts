@@ -1,10 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { AuditEntry, ClubDetail, ClubMember, ClubRole, GAME_MODES, Lobby, LobbyGameMode, MatchSummary, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
 import { ClubService } from '../../core/services/club.service';
+import { LobbyHubService } from '../../core/services/lobby-hub.service';
 import { LobbyService } from '../../core/services/lobby.service';
 import { AuditLogComponent } from '../../shared/audit-log/audit-log.component';
 import { ChampionPickerComponent } from '../../shared/champion-picker/champion-picker.component';
@@ -521,13 +523,15 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
     }
   `,
 })
-export class ClubDetailComponent implements OnInit {
+export class ClubDetailComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly clubService = inject(ClubService);
   private readonly lobbyService = inject(LobbyService);
+  private readonly hub = inject(LobbyHubService);
   protected readonly auth = inject(AuthService);
   protected readonly champions = inject(ChampionService);
+  private readonly subs = new Subscription();
 
   protected clubId = '';
   protected readonly tab = signal<Tab>('play');
@@ -582,6 +586,29 @@ export class ClubDetailComponent implements OnInit {
     this.reloadLobbies();
     this.clubService.getMatches(this.clubId).subscribe((m) => this.matches.set(m));
     this.clubService.getBannedChampions(this.clubId).subscribe((ids) => this.bans.set(ids));
+
+    this.subs.add(this.hub.clubLobbyUpserted$.subscribe((lobby) => {
+      if (lobby.clubId !== this.clubId) return;
+      this.lobbies.update((list) => {
+        const idx = list.findIndex((l) => l.id === lobby.id);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = lobby;
+          return next;
+        }
+        return [lobby, ...list];
+      });
+      if (lobby.status === 'Played') this.clubService.getMatches(this.clubId).subscribe((m) => this.matches.set(m));
+    }));
+    this.subs.add(this.hub.clubLobbyDeleted$.subscribe((evt) => {
+      if (evt.clubId === this.clubId) this.lobbies.update((list) => list.filter((l) => l.id !== evt.lobbyId));
+    }));
+    this.hub.joinClub(this.clubId).catch(() => undefined);
+  }
+
+  ngOnDestroy(): void {
+    this.subs.unsubscribe();
+    this.hub.leaveClub(this.clubId).catch(() => undefined);
   }
 
   private reloadJoinRequests(): void {
