@@ -1,13 +1,15 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { map, switchMap } from 'rxjs';
+import { AuthService } from '../../core/services/auth.service';
 import { ClubService } from '../../core/services/club.service';
 
 /**
- * Landing page for a shareable invite link (`/invite/:code`). By the time this component
- * renders, `authGuard` has already ensured the visitor is logged in, approved and has a Riot
- * account linked — bouncing them through /login, /pending and /profile (each carrying this
- * URL as `returnUrl`) as needed first. All that's left here is to redeem the code and land
- * them straight in the club.
+ * Landing page for a shareable invite link (`/invite/:code`). `inviteGuard` only requires a
+ * signed-in (non-rejected) account: redeeming a valid invite is what approves a Pending user
+ * for the site, and joins them to the club in one go. After that, `authGuard` on the club page
+ * takes over — bouncing them via /profile to link a Riot ID if they haven't yet — with this
+ * URL carried along as `returnUrl` throughout.
  */
 @Component({
   selector: 'app-invite',
@@ -65,6 +67,7 @@ export class InviteComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly clubService = inject(ClubService);
+  private readonly auth = inject(AuthService);
 
   protected readonly error = signal('');
 
@@ -75,9 +78,14 @@ export class InviteComponent implements OnInit {
       return;
     }
 
-    this.clubService.joinByInvite(code).subscribe({
-      next: (club) => this.router.navigate(['/clubs', club.id]),
-      error: (e) => this.error.set(e?.error?.title ?? 'No club found with that invite code.'),
-    });
+    // Re-probe /auth/me after joining so the cached user reflects the (possibly just-granted)
+    // Approved status before authGuard evaluates the club route.
+    this.clubService
+      .joinByInvite(code)
+      .pipe(switchMap((club) => this.auth.checkSession().pipe(map(() => club))))
+      .subscribe({
+        next: (club) => this.router.navigate(['/clubs', club.id]),
+        error: (e) => this.error.set(e?.error?.title ?? 'No club found with that invite code.'),
+      });
   }
 }

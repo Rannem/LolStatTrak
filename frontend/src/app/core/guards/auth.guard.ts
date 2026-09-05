@@ -26,6 +26,25 @@ export const authGuard: CanActivateFn = (_route, state) => {
   );
 };
 
+/**
+ * Invite links only need a signed-in account — a valid invite is what approves a Pending user,
+ * so they must be allowed through before approval. Rejected users still get bounced to /pending
+ * (which explains they've been declined). The Riot-link requirement is applied afterwards by
+ * `authGuard` when the invite page forwards them into the club.
+ */
+export const inviteGuard: CanActivateFn = (_route, state) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return auth.ensureSession().pipe(
+    map(() => {
+      if (!auth.isAuthenticated()) return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+      if (auth.user()?.accessStatus === 'Rejected' && !auth.isGlobalAdmin()) return router.createUrlTree(['/pending']);
+      return true;
+    }),
+  );
+};
+
 /** Signed in but not yet approved — the only place such users may land. */
 export const pendingGuard: CanActivateFn = (_route, state) => {
   const auth = inject(AuthService);

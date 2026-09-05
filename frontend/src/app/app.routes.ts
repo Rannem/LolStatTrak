@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, globalAdminGuard, pendingGuard } from './core/guards/auth.guard';
+import { authGuard, globalAdminGuard, inviteGuard, pendingGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'clubs' },
@@ -19,7 +19,7 @@ export const routes: Routes = [
   },
   {
     path: 'invite/:code',
-    canActivate: [authGuard],
+    canActivate: [inviteGuard],
     loadComponent: () => import('./pages/invite/invite.component').then((m) => m.InviteComponent),
   },
   {

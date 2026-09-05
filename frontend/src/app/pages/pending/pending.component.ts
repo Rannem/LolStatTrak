@@ -19,8 +19,9 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
           } @else {
             <div class="badge gold pulse">⏳ Awaiting approval</div>
             <p class="muted">
-              Your account is registered but an admin needs to let you in first.
-              Give them a nudge on Discord — once approved you'll be able to join clubs and roll lobbies.
+              Your account is registered but needs to be let in first. The quickest way: ask a friend
+              who's already in a club to send you their <strong>invite link</strong> — opening it approves you
+              instantly. Otherwise an admin will approve you manually.
             </p>
             <button class="btn-accent" (click)="recheck()" [disabled]="checking">
               {{ checking ? 'Checking…' : 'Check again' }}

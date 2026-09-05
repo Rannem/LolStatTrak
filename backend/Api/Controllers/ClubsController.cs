@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.SignalR;
 namespace LolStatTrak.Api.Controllers;
 
 public record CreateClubRequest(string Name);
-public record JoinByInviteRequest(string InviteCode);
 public record SetBannedChampionsRequest(int[] ChampionIds);
 public record SetMemberRoleRequest(ClubMemberRole Role);
 
@@ -137,18 +136,8 @@ public class ClubsController(
 
     // --- Membership ----------------------------------------------------------------------
 
-    /// <summary>Auto-join flow: a valid invite code joins immediately as an Approved member.</summary>
-    [HttpPost("join/invite")]
-    public async Task<IActionResult> JoinByInvite([FromBody] JoinByInviteRequest request)
-    {
-        var club = await clubRepository.GetByInviteCodeAsync(request.InviteCode.Trim());
-        if (club is null)
-            return NotFound(new { title = "No club found with that invite code." });
-
-        await clubRepository.JoinViaInviteAsync(club.Id, CurrentUserId);
-        await audit.LogAsync(club.Id, CurrentUserId, "member.joined_via_invite", "user", CurrentUserId.ToString());
-        return Ok(club);
-    }
+    // Joining via invite code lives in InvitesController: it must be reachable by users who
+    // are still Pending site approval, since a valid invite is what approves them.
 
     /// <summary>Request-to-join flow: creates a Pending membership awaiting mod approval.</summary>
     [HttpPost("{clubId:guid}/join-requests")]

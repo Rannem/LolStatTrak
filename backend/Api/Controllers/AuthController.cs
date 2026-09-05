@@ -20,7 +20,7 @@ public class AuthController(
     RiotApiClient riotApiClient,
     GlobalAdminOptions globalAdmins) : ControllerBase
 {
-    private const string SessionCookie = "lst_session";
+    private const string SessionCookieName = SessionCookie.Name;
 
     /// <summary>Kicks off the Discord OAuth2 code flow.</summary>
     [HttpGet("discord/login")]
@@ -66,7 +66,7 @@ public class AuthController(
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete(SessionCookie);
+        Response.Cookies.Delete(SessionCookieName);
         return Ok();
     }
 
@@ -83,7 +83,7 @@ public class AuthController(
         var user = await userRepository.GetByIdAsync(User.GetUserId());
         if (user is null)
         {
-            Response.Cookies.Delete(SessionCookie);
+            Response.Cookies.Delete(SessionCookieName);
             return Unauthorized();
         }
 
@@ -143,17 +143,7 @@ public class AuthController(
         return Ok(ToProfile(user!));
     }
 
-    private void IssueSessionCookie(User user)
-    {
-        // App JWT stored as an httpOnly cookie, consumed by both REST calls and the SignalR handshake.
-        Response.Cookies.Append(SessionCookie, jwtTokenService.CreateToken(user), new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddDays(7),
-        });
-    }
+    private void IssueSessionCookie(User user) => SessionCookie.Issue(Response, jwtTokenService, user);
 
     private static object ToProfile(User user) => new
     {
