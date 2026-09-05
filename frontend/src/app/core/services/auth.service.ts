@@ -52,12 +52,11 @@ export class AuthService {
       .pipe(tap((user) => this._user.set(user)));
   }
 
-  loginWithDiscord(): void {
-    // Always land on /clubs after a successful login, regardless of which page the
-    // button was clicked from (e.g. /login itself, which doesn't know how to react
-    // to "now authenticated" on its own).
-    const returnUrl = encodeURIComponent('/clubs');
-    window.location.href = `${environment.apiBaseUrl}/auth/discord/login?returnUrl=${returnUrl}`;
+  loginWithDiscord(returnUrl = '/clubs'): void {
+    // Defaults to /clubs after a successful login, but callers (e.g. /login carrying a
+    // `returnUrl` query param from a guard redirect) can send the user back to wherever
+    // they originally meant to go — like an invite link.
+    window.location.href = `${environment.apiBaseUrl}/auth/discord/login?returnUrl=${encodeURIComponent(returnUrl)}`;
   }
 
   logout() {

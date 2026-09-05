@@ -28,8 +28,8 @@ type Tab = 'play' | 'matches' | 'members' | 'audit';
             <div class="eyebrow">Club · you are {{ club.myRole ?? 'a global admin' }}</div>
             <h1>{{ club.name }}</h1>
             <div class="muted small">
-              Invite code <span class="code">{{ club.inviteCode }}</span>
-              <button class="btn-ghost btn-sm copy" (click)="copyInvite(club.inviteCode)">{{ copied() ? 'Copied!' : 'Copy' }}</button>
+              Invite link <span class="code">{{ inviteLink(club.inviteCode) }}</span>
+              <button class="btn-ghost btn-sm copy" (click)="copyInvite(club.inviteCode)">{{ copied() ? 'Copied!' : 'Copy link' }}</button>
             </div>
           </div>
           <div class="new-lobby">
@@ -729,8 +729,12 @@ export class ClubDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  inviteLink(code: string): string {
+    return `${window.location.origin}/invite/${code}`;
+  }
+
   copyInvite(code: string): void {
-    navigator.clipboard?.writeText(code).then(() => {
+    navigator.clipboard?.writeText(this.inviteLink(code)).then(() => {
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 1500);
     });

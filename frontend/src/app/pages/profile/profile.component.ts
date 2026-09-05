@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 
@@ -15,6 +16,13 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
           <h1>Profile</h1>
         </div>
       </div>
+
+      @if (setupMode() && !auth.user()?.riotLinked) {
+        <div class="card setup-banner">
+          <strong>One last step:</strong> link your Riot ID to unlock the rest of the site. This
+          is how your custom game stats get attributed to you.
+        </div>
+      }
 
       @if (auth.user(); as user) {
         <div class="card identity">
@@ -112,16 +120,31 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
       color: var(--success);
       margin: 0.75rem 0 0;
     }
+    .setup-banner {
+      border-color: var(--gold-3);
+      color: var(--gold-1);
+      margin-bottom: 1.25rem;
+    }
   `,
 })
 export class ProfileComponent {
   protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected gameName = '';
   protected tagLine = '';
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly success = signal('');
+  protected readonly setupMode = signal(false);
+
+  private returnUrl = '';
+
+  constructor() {
+    this.returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '';
+    this.setupMode.set(!!this.returnUrl);
+  }
 
   link(): void {
     this.busy.set(true);
@@ -133,6 +156,7 @@ export class ProfileComponent {
         this.gameName = '';
         this.tagLine = '';
         this.busy.set(false);
+        if (this.returnUrl) this.router.navigateByUrl(this.returnUrl);
       },
       error: (e) => {
         this.error.set(e?.error?.title ?? 'Could not link that Riot account.');

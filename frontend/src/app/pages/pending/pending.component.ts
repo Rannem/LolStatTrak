@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 
@@ -69,13 +69,17 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 export class PendingComponent {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   protected checking = false;
 
   recheck(): void {
     this.checking = true;
     this.auth.checkSession().subscribe(() => {
       this.checking = false;
-      if (this.auth.isApproved()) this.router.navigateByUrl('/clubs');
+      if (this.auth.isApproved()) {
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/clubs';
+        this.router.navigateByUrl(returnUrl);
+      }
     });
   }
 

@@ -18,6 +18,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/clubs/clubs.component').then((m) => m.ClubsComponent),
   },
   {
+    path: 'invite/:code',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/invite/invite.component').then((m) => m.InviteComponent),
+  },
+  {
     path: 'clubs/:clubId',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/club-detail/club-detail.component').then((m) => m.ClubDetailComponent),
