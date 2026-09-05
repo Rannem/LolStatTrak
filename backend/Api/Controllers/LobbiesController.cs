@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.SignalR;
 namespace LolStatTrak.Api.Controllers;
 
 public record CreateLobbyRequest(Guid ClubId, LobbyGameMode GameMode = LobbyGameMode.Aram, bool? AssignChampions = null);
+public record AddLobbyPlayerRequest(Guid UserId);
 
 [ApiController]
 [Route("api/lobbies")]
@@ -73,6 +74,57 @@ public class LobbiesController(
         var players = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
         await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
             .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId = CurrentUserId, players });
+        await BroadcastLobbyChanged(lobbyId);
+        return Ok(players);
+    }
+
+    /// <summary>
+    /// Adds another club member to the lobby on their behalf — for friends at the table who
+    /// don't want to open the site themselves. Only approved members of the club can be added.
+    /// </summary>
+    [HttpPost("{lobbyId:guid}/players")]
+    public async Task<IActionResult> AddPlayer(Guid lobbyId, [FromBody] AddLobbyPlayerRequest request)
+    {
+        var lobby = await lobbyRepository.GetAsync(lobbyId);
+        if (lobby is null)
+            return NotFound();
+        if (!await access.IsMemberAsync(User, lobby.ClubId))
+            return Forbid();
+        if (lobby.Status == LobbyStatus.Played)
+            return BadRequest(new { title = "This lobby has already been played." });
+
+        var membership = await clubRepository.GetMembershipAsync(lobby.ClubId, request.UserId);
+        if (membership is null || membership.Status != ClubMembershipStatus.Approved)
+            return BadRequest(new { title = "That player isn't a member of this club." });
+
+        await lobbyRepository.JoinAsync(lobbyId, request.UserId);
+        await audit.LogAsync(lobby.ClubId, CurrentUserId, "lobby.player_added", "user", request.UserId.ToString(), new { lobbyId });
+        var players = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
+        await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
+            .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId = request.UserId, players });
+        await BroadcastLobbyChanged(lobbyId);
+        return Ok(players);
+    }
+
+    /// <summary>Removes a player (yourself or someone added by mistake) from an unplayed lobby.</summary>
+    [HttpDelete("{lobbyId:guid}/players/{userId:guid}")]
+    public async Task<IActionResult> RemovePlayer(Guid lobbyId, Guid userId)
+    {
+        var lobby = await lobbyRepository.GetAsync(lobbyId);
+        if (lobby is null)
+            return NotFound();
+        if (!await access.IsMemberAsync(User, lobby.ClubId))
+            return Forbid();
+        if (lobby.Status == LobbyStatus.Played)
+            return BadRequest(new { title = "This lobby has already been played." });
+
+        if (!await lobbyRepository.RemovePlayerAsync(lobbyId, userId))
+            return NotFound(new { title = "That player isn't in the lobby." });
+
+        await audit.LogAsync(lobby.ClubId, CurrentUserId, userId == CurrentUserId ? "lobby.left" : "lobby.player_removed", "user", userId.ToString(), new { lobbyId });
+        var players = (await lobbyRepository.GetPlayerViewsAsync(lobbyId)).ToList();
+        await hubContext.Clients.Group(LobbyHub.GroupName(lobbyId.ToString()))
+            .SendAsync(LobbyHubEvents.PlayerJoined, new { lobbyId, userId, players });
         await BroadcastLobbyChanged(lobbyId);
         return Ok(players);
     }

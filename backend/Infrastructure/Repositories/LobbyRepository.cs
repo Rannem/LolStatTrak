@@ -61,6 +61,14 @@ public class LobbyRepository(NpgsqlConnectionFactory connectionFactory)
             new { lobbyId, userId });
     }
 
+    public async Task<bool> RemovePlayerAsync(Guid lobbyId, Guid userId)
+    {
+        await using var conn = await connectionFactory.CreateOpenConnectionAsync();
+        return await conn.ExecuteAsync(
+            "delete from lobby_players where lobby_id = @lobbyId and user_id = @userId",
+            new { lobbyId, userId }) > 0;
+    }
+
     public async Task<IEnumerable<LobbyPlayer>> GetPlayersAsync(Guid lobbyId)
     {
         await using var conn = await connectionFactory.CreateOpenConnectionAsync();

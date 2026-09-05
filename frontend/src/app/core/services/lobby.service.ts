@@ -20,6 +20,14 @@ export class LobbyService {
     return this.http.post<LobbyPlayer[]>(`${this.base}/${lobbyId}/join`, {}, { withCredentials: true });
   }
 
+  addPlayer(lobbyId: string, userId: string) {
+    return this.http.post<LobbyPlayer[]>(`${this.base}/${lobbyId}/players`, { userId }, { withCredentials: true });
+  }
+
+  removePlayer(lobbyId: string, userId: string) {
+    return this.http.delete<LobbyPlayer[]>(`${this.base}/${lobbyId}/players/${userId}`, { withCredentials: true });
+  }
+
   roll(lobbyId: string) {
     return this.http.post<LobbyPlayer[]>(`${this.base}/${lobbyId}/roll`, {}, { withCredentials: true });
   }

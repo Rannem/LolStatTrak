@@ -2,9 +2,10 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, Subscription } from 'rxjs';
-import { CorrelationResult, Lobby, LobbyPlayer, Team, gameModeLabel } from '../../core/models/models';
+import { CorrelationResult, ClubMember, Lobby, LobbyPlayer, Team, gameModeLabel } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { ChampionService } from '../../core/services/champion.service';
+import { ClubService } from '../../core/services/club.service';
 import { LobbyHubService } from '../../core/services/lobby-hub.service';
 import { LobbyService } from '../../core/services/lobby.service';
 import { AvatarPipe } from '../../core/pipes/avatar.pipe';
@@ -35,6 +36,9 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
             <button class="btn-accent" (click)="join()" [disabled]="busy()">Join lobby</button>
           }
           @if (!isPlayed()) {
+            <button class="btn-ghost" (click)="toggleAddPlayer()" [disabled]="busy()">＋ Add player</button>
+          }
+          @if (!isPlayed()) {
             <button class="btn-primary" (click)="roll()" [disabled]="busy() || players().length === 0">
               {{ rolling() ? '⏳' : '🎲' }} {{ isRolled() ? 'Re-roll' : (assignChampions() ? 'Roll teams & champions' : 'Roll teams') }}
             </button>
@@ -53,6 +57,31 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
       }
       @if (notice()) {
         <div class="card notice">{{ notice() }}</div>
+      }
+
+      @if (showAddPlayer() && !isPlayed()) {
+        <div class="card add-panel">
+          <div class="add-head">
+            <h2>Add club members</h2>
+            <p class="muted small">For friends at the table who'd rather not open the site. Their stats still get tracked if they've linked a Riot ID.</p>
+          </div>
+          @if (addableMembers().length === 0) {
+            <div class="empty">Everyone in the club is already in this lobby.</div>
+          } @else {
+            <ul class="clean addable">
+              @for (m of addableMembers(); track m.userId) {
+                <li>
+                  <img class="avatar avatar-sm" [src]="m.avatarUrl | avatar: 32" [alt]="m.discordUsername" />
+                  <div class="grow">
+                    <div>{{ m.discordUsername }}</div>
+                    <div class="dim small">{{ m.riotGameName ? m.riotGameName + '#' + m.riotTagLine : 'no Riot ID linked' }}</div>
+                  </div>
+                  <button class="btn-accent btn-sm" (click)="addPlayer(m)" [disabled]="busy()">Add</button>
+                </li>
+              }
+            </ul>
+          }
+        </div>
       }
 
       @if (isRolled()) {
@@ -87,10 +116,11 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
               @for (p of players(); track p.userId) {
                 <li>
                   <img class="avatar" [src]="p.avatarUrl | avatar: 64" [alt]="p.discordUsername" />
-                  <span>{{ p.discordUsername }}</span>
+                  <span class="grow">{{ p.discordUsername }}</span>
                   @if (p.userId === auth.user()?.id) {
                     <span class="badge blue">you</span>
                   }
+                  <button class="btn-ghost btn-sm" (click)="removePlayer(p)" [disabled]="busy()" title="Remove from lobby">✕</button>
                 </li>
               }
             </ul>
@@ -176,6 +206,31 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
     }
 
     .waiting li + li {
+      border-top: 1px solid var(--border);
+    }
+
+    .grow {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .add-panel {
+      margin-bottom: 1.25rem;
+      border-color: var(--gold-4);
+    }
+
+    .add-head p {
+      margin: 0.25rem 0 0.75rem;
+    }
+
+    .addable li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+    }
+
+    .addable li + li {
       border-top: 1px solid var(--border);
     }
 
@@ -343,6 +398,7 @@ import { AvatarPipe } from '../../core/pipes/avatar.pipe';
 export class LobbyComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly lobbyService = inject(LobbyService);
+  private readonly clubService = inject(ClubService);
   private readonly hub = inject(LobbyHubService);
   protected readonly auth = inject(AuthService);
   protected readonly champions = inject(ChampionService);
@@ -350,6 +406,8 @@ export class LobbyComponent implements OnInit, OnDestroy {
   protected lobbyId = '';
   protected readonly lobby = signal<Lobby | null>(null);
   protected readonly players = signal<LobbyPlayer[]>([]);
+  protected readonly members = signal<ClubMember[]>([]);
+  protected readonly showAddPlayer = signal(false);
   protected readonly connected = signal(false);
   protected readonly busy = signal(false);
   protected readonly rolling = signal(false);
@@ -362,6 +420,10 @@ export class LobbyComponent implements OnInit, OnDestroy {
   protected readonly isPlayed = computed(() => this.lobby()?.status === 'Played');
   protected readonly assignChampions = computed(() => this.lobby()?.assignChampions ?? true);
   protected readonly amIn = computed(() => this.players().some((p) => p.userId === this.auth.user()?.id));
+  protected readonly addableMembers = computed(() => {
+    const inLobby = new Set(this.players().map((p) => p.userId));
+    return this.members().filter((m) => !inLobby.has(m.userId));
+  });
 
   private subs = new Subscription();
 
@@ -418,6 +480,23 @@ export class LobbyComponent implements OnInit, OnDestroy {
       (players) => this.setPlayers(players),
       () => this.players.set(before),
     );
+  }
+
+  toggleAddPlayer(): void {
+    const open = !this.showAddPlayer();
+    this.showAddPlayer.set(open);
+    if (open && this.members().length === 0) {
+      const clubId = this.lobby()?.clubId;
+      if (clubId) this.clubService.getMembers(clubId).subscribe((members) => this.members.set(members));
+    }
+  }
+
+  addPlayer(member: ClubMember): void {
+    this.run(this.lobbyService.addPlayer(this.lobbyId, member.userId), (players) => this.setPlayers(players));
+  }
+
+  removePlayer(player: LobbyPlayer): void {
+    this.run(this.lobbyService.removePlayer(this.lobbyId, player.userId), (players) => this.setPlayers(players));
   }
 
   roll(): void {
